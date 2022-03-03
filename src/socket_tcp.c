@@ -95,10 +95,9 @@ int accept_socket_tcp(const socket_tcp *s, socket_tcp *service) {
 	if (sockaddr_to_adresse_internet((struct sockaddr *) &ss, service->local) != 0) {
 		return -1;
 	}
-	
 	// getnameinfo avec local
-	/*int errnum;
-	if ((errnum = getnameinfo((struct sock_addr *) &service->local->sock_addr, sizeof(struct sockaddr_storage), 
+	int errnum;
+	if ((errnum = getnameinfo((struct sockaddr *) &service->local->sock_addr, sizeof(struct sockaddr_storage), 
 			service->local->nom, sizeof(service->local->nom),
 			service->local->service, sizeof(service->local->service), NI_NAMEREQD)) != 0) {
 		fprintf(stderr, "getnameinfo: %s\n", gai_strerror(errnum));
@@ -106,13 +105,14 @@ int accept_socket_tcp(const socket_tcp *s, socket_tcp *service) {
 	}
 	
 	// getnameinfo avec remote
-	if ((errnum = getnameinfo((struct sock_addr *) &service->remote->sock_addr, sizeof(struct sockaddr_storage), 
+	if ((errnum = getnameinfo((struct sockaddr *) &service->remote->sock_addr, sizeof(struct sockaddr_storage), 
 			service->remote->nom, sizeof(service->remote->nom),
 			service->remote->service, sizeof(service->remote->service), NI_NAMEREQD)) != 0) {
 		fprintf(stderr, "getnameinfo: %s\n", gai_strerror(errnum));
 		return -1;
-	}*/
-	
+	}
+	printf("accept_socket_tcp : service->local : %s:%s\n", service->local->nom, service->local->service);
+	printf("accept_socket_tcp : service->remote : %s:%s\n", service->remote->nom, service->remote->service);
 	return 0;
 }
 
