@@ -13,11 +13,16 @@ LIBDIR = lib
 # Nom des fichiers sans l'extension c et o
 SERVER = server
 CLIENT = client
+ADRESSE_INTERNET = adresse_internet
+SOCKET_TCP = socket_tcp
 
 #---------------------------------------------------------#
 # Construction des dossiers bin et obj : make start_build #
 #---------------------------------------------------------#
-build :
+build : build_dir
+	$(CC) -c ./$(SRCDIR)/$(ADRESSE_INTERNET).c $(CFLAGS) -o ./$(OBJDIR)/$(ADRESSE_INTERNET).o
+	$(CC) -c ./$(SRCDIR)/$(SOCKET_TCP).c $(CFLAGS) -o ./$(OBJDIR)/$(SOCKET_TCP).o
+build_dir :
 	mkdir -p ./$(OBJDIR) ./$(BINDIR) ./$(LIBDIR)
 
 #-------------------------------------------#
@@ -28,24 +33,23 @@ client : ./$(BINDIR)/$(CLIENT)
 	./$(BINDIR)/$(CLIENT) $(CONFIG_FILE)
 # Génération de l'éxécutable client et édition des liens
 ./$(BINDIR)/$(CLIENT) : ./$(OBJDIR)/$(CLIENT).o
-	$(CC) -o ./$(BINDIR)/$(CLIENT) ./$(OBJDIR)/$(CLIENT).o $(LDLIBS)
+	$(CC) -o ./$(BINDIR)/$(CLIENT) ./$(OBJDIR)/$(CLIENT).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o ./$(OBJDIR)/$(SOCKET_TCP).o $(LDLIBS)
 # Compilation client.c pour générer le fichier objet dans le dossier ./$(OBJDIR)
 ./$(OBJDIR)/$(CLIENT).o : ./$(SRCDIR)/$(CLIENT).c
 	$(CC) -c ./$(SRCDIR)/$(CLIENT).c $(CFLAGS) -o ./$(OBJDIR)/$(CLIENT).o
 
 #----------------------------------------#
-# Lancement du démon : make start_server # 
+# Lancement du démon : make start_server #
 #----------------------------------------#
 # Éxécution du fichier éxécutable server
 server : ./$(BINDIR)/$(SERVER)
 	./$(BINDIR)/$(SERVER) $(CONFIG_FILE)
 # Génération de l'éxécutable demon et édition des liens
 ./$(BINDIR)/$(SERVER) : ./$(OBJDIR)/$(SERVER).o
-	$(CC) -o ./$(BINDIR)/$(SERVER) ./$(OBJDIR)/$(SERVER).o $(LDLIBS)
+	$(CC) -o ./$(BINDIR)/$(SERVER) ./$(OBJDIR)/$(SERVER).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o ./$(OBJDIR)/$(SOCKET_TCP).o $(LDLIBS)
 # Compilation server.c pour générer le fichier objet dans le dossier ./$(OBJDIR)
 ./$(OBJDIR)/$(SERVER).o : ./$(SRCDIR)/$(SERVER).c
-	$(CC) -c ./$(SRCDIR)/$(SERVER).c $(CFLAGS) -o ./$(OBJDIR)/$(SERVER).o
-
+	$(CC) -c ./$(SRCDIR)/$(SERVER).c -I/inc $(CFLAGS) -o ./$(OBJDIR)/$(SERVER).o
 
 #-----------#
 # Nettoyage #

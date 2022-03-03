@@ -5,8 +5,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include "socket_tcp.h"
-#include "adresse_internet.h"
+#include "../inc/socket_tcp.h"
+#include "../inc/adresse_internet.h"
 
 socket_tcp *init_socket_tcp(void) {
 	socket_tcp *socket = (socket_tcp *) calloc(1, sizeof(socket_tcp));

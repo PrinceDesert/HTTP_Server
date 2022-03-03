@@ -5,7 +5,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include "adresse_internet.h"
+#include "../inc/adresse_internet.h"
 
 #ifndef NI_MAXHOST
 // NI_MAXHOST n'est pas définie pas SUSv4 mais peut l'être sur certains systèmes.
