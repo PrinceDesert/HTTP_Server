@@ -7,6 +7,15 @@
 #include "../inc/socket_tcp.h"
 #include "../inc/config.h"
 
+
+/**
+	typedef struct request {
+		header_t // entete
+			-> struct avec method, date, useragent ect 
+		
+	}
+*/
+
 int main() {
 	pid_t pid = getpid();
 	printf("==================================================\n");
