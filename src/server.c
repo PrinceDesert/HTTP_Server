@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <pthread.h>
 #include "../inc/adresse_internet.h"
 #include "../inc/socket_tcp.h"
 #include "../inc/config.h"
@@ -12,10 +13,19 @@
  * Todo : timeout client et server en émission et réception
  * EN TCP : mettre un select sur le descripteur de fichier voir cours
  * utilisé setsockopt ?
+ * gérer les signaux
+ * commenté fichiers sources commentés de vos bibliothèques et de votre serveur http, client
+ * des tests de vos bibliothèques et de votre serveur,
+ * un rapport et manuel d'utilisation
  * ressources : 
   * https://code.tutsplus.com/tutorials/http-headers-for-dummies--net-8039
   * https://github.com/AaronKalair/C-Web-Server
 */
+
+void thread_allocation(socket_tcp *service); // Allocation d'un thread
+void * run_connection_processing(void *arg); // Traitement de la connexion avec le client
+
+void perror_r(int errno, const char* s); // perror reetrant pour thread
 
 pid_t pid;
 socket_tcp *s;
@@ -49,8 +59,6 @@ int main() {
 	char buffer_read[BUFFER_SIZE];
 	ssize_t n;
 	while ((errnum = accept_socket_tcp(s, service)) != -1) {
-		printf("[Serveur:%d] Allocation d'une ressource (thread)\n", pid);
-		
 		// mettre un timeout  select pour receive mais dans la fonction recev de tcp mais ici direct
 		if ((n = read_socket_tcp(service, buffer_read, sizeof(buffer_read))) == -1) {
 			fprintf(stderr, "[Erreur] read_socket_tcp %ld\n", n);
@@ -62,6 +70,7 @@ int main() {
 		// write
 	}
 	if (errnum == -1) {
+		fprintf(stderr, "[Erreur] accept_socket_tcp\n");
 		return EXIT_FAILURE;
 	}
 	
@@ -70,4 +79,42 @@ int main() {
 	}
 	
 	return EXIT_SUCCESS;
+}
+
+void thread_allocation(socket_tcp *service) {
+	if (service == NULL) return;
+	fprintf(stdout, "[Serveur:%d] Allocation d'une ressource (thread)\n", pid);
+	int return_value;
+	pthread_attr_t attr;
+	// Initiliase les attributs du thread
+	if ((return_value = pthread_attr_init(&attr)) != 0) {
+		perror_r(return_value, "pthread_attr_init");
+		exit(EXIT_FAILURE);
+	}
+	// Thread en mode détaché
+	if ((return_value = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED)) != 0) {
+		perror_r(return_value, "pthread_attr_setdetachstate");
+		exit(EXIT_FAILURE);
+	}
+	pthread_t th;
+	// Création du thread avec sa start_routine service
+	if ((return_value = pthread_create(&th, &attr, run_connection_processing, (void *) service)) != 0) {
+		perror_r(return_value, "pthead_create");
+		exit(EXIT_FAILURE);
+	}
+	// Destruction des attributs initialisés
+	if ((return_value = pthread_attr_destroy(&attr)) != 0) {
+		perror_r(return_value, "pthread_attr_destroy");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void * run_connection_processing(void *arg) {
+	
+	// return NULL;
+	pthread_exit(NULL);
+}
+
+void perror_r(int errno, const char* s) {
+	fprintf(stderr, "[Erreur] %s: %s\n", s, strerror(errno));
 }
