@@ -6,7 +6,7 @@
 #include "../inc/adresse_internet.h"
 #include "../inc/socket_tcp.h"
 #include "../inc/config.h"
-
+#include "../inc/http_def.h"
 
 /**
 	typedef struct request {
@@ -15,6 +15,16 @@
 		
 	}
 */
+
+typedef struct {
+	const method_t method; // GET, POST
+	const char *path; // URL du fichier
+	const char *protocol; // HTTP/1.x x = version
+	header_t headers[MAX_SIZE_HEADERS_FIELDS]; // entêtes de la requête, avec au max 64 champs
+	char *body; // corps de la requête
+} _http_request;
+typedef  _http_request http_request;
+
 
 int main() {
 	pid_t pid = getpid();

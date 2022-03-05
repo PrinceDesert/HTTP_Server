@@ -7,6 +7,7 @@
 #include "../inc/adresse_internet.h"
 #include "../inc/socket_tcp.h"
 #include "../inc/config.h"
+#include "../inc/http_def.h"
 
 /**
  * Fichier server.c
@@ -14,22 +15,39 @@
  * EN TCP : mettre un select sur le descripteur de fichier voir cours
  * utilisé setsockopt ?
  * // mettre un timeout  select pour accept(délai d'attente max d'un client) && receive mais dans la fonction recev de tcp mais ici direct
+ * pour le fstat since date : récupèrer la date du fstat et comparé avec la date du since de la request
+ * comparé les protocols http/1.1 si c le meme meme si ça sert pas
  * gérer les signaux
  * commenté fichiers sources commentés de vos bibliothèques et de votre serveur http, client
  * des tests de vos bibliothèques et de votre serveur,
  * un rapport et manuel d'utilisation
  * ressources : 
-  * https://code.tutsplus.com/tutorials/http-headers-for-dummies--net-8039
-  * https://github.com/AaronKalair/C-Web-Server
+ * https://code.tutsplus.com/tutorials/http-headers-for-dummies--net-8039
+ * https://github.com/AaronKalair/C-Web-Server
+ * List des champs http : https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
 */
+
+
+typedef struct {
+	const char *protocol; // HTTP/1.x x = version
+	const status_t status_code; // 200 OK, 206 Partial Content, 404 Not Found, 401 Unauthorized, 403 Forbidden
+	header_t headers[MAX_SIZE_HEADERS_FIELDS]; // entêtes de la réponse, avec au max 64 champs
+} _http_response;
+typedef  _http_response http_response;
+
+// headers["host"] = localhost -> s->getname()
+
 
 void thread_allocation(socket_tcp *service); // Allocation d'un thread
 void * run_connection_processing(void *arg); // Traitement de la connexion avec le client
-
 void perror_r(int errno, const char* s); // perror reetrant pour thread
+void parse_commandline(char *cmd); // GET / HTTP/1.0 -> parse et affecte
+
 
 pid_t pid;
 socket_tcp *s;
+
+
 
 
 
