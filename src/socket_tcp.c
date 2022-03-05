@@ -74,6 +74,7 @@ int accept_socket_tcp(const socket_tcp *s, socket_tcp *service) {
 		fprintf(stderr, "[Erreur] -> accept_socket_tcp : accept : %d\n", socket_fd);
 		return -1;
 	}
+	service->socket_fd = socket_fd;
 	service->remote = malloc(sizeof(adresse_internet));
 	if (service->remote == NULL) {
 		fprintf(stderr, "[Erreur] -> accept_socket_tcp : malloc service->remote : %lu\n", sizeof(adresse_internet));
@@ -93,6 +94,7 @@ int accept_socket_tcp(const socket_tcp *s, socket_tcp *service) {
 	// Même chose pour local pour getsockname
 	service->local = malloc(sizeof(adresse_internet));
 	if (sockaddr_to_adresse_internet((struct sockaddr *) &ss, service->local) != 0) {
+		fprintf(stderr, "[Erreur] -> accept_socket_tcp : sockaddr_to_adresse_internet\n");
 		return -1;
 	}
 	// getnameinfo avec local
@@ -129,14 +131,18 @@ ssize_t write_socket_tcp(const socket_tcp *s, const void *buffer, size_t length)
 }
 
 ssize_t read_socket_tcp(const socket_tcp *s, const void *buffer, size_t length) {
+	printf("entre dans read tcp\n");
 	if (s == NULL) {
 		fprintf(stderr, "[Erreur] -> read_socket_tcp : s vaut NULL\n");
 		return -1;
 	}
+	printf("s pas null\n");
 	if (buffer == NULL) {
 		fprintf(stderr, "[Erreur] -> read_socket_tcp : buffer vaut NULL\n");
 		return -1;
 	}
+	printf("buffer pas null\n");
+	printf("read_socket_tcp : s->socket_fd : %d - length : %lu\n", s->socket_fd, length);
 	return read(s->socket_fd, (void *) buffer, length);
 }
 

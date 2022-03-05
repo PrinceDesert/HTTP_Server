@@ -1,7 +1,7 @@
 # Variables du Makefile
 CC = gcc
 # Option de compilation
-CFLAGS = -std=c11 -Wpedantic -Wall -Wextra -Wconversion -Wwrite-strings -Werror -fstack-protector-all -fpie -D_FORTIFY_SOURCE=2 -O2 -D_XOPEN_SOURCE=700 -g
+CFLAGS = -std=c11 -Wpedantic -Wall -Wextra -Wconversion -Wwrite-strings -Werror -fstack-protector-all -fpie -D_FORTIFY_SOURCE=2 -O2 -D_XOPEN_SOURCE=700 -D_REENTRANT -g
 # Option d'édition de lien
 LDFLAGS =
 LDLIBS = -Wl,-z,relro,-z,now -pie -lrt -pthread
