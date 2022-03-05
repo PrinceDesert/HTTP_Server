@@ -131,18 +131,15 @@ ssize_t write_socket_tcp(const socket_tcp *s, const void *buffer, size_t length)
 }
 
 ssize_t read_socket_tcp(const socket_tcp *s, const void *buffer, size_t length) {
-	printf("entre dans read tcp\n");
 	if (s == NULL) {
 		fprintf(stderr, "[Erreur] -> read_socket_tcp : s vaut NULL\n");
 		return -1;
 	}
-	printf("s pas null\n");
 	if (buffer == NULL) {
 		fprintf(stderr, "[Erreur] -> read_socket_tcp : buffer vaut NULL\n");
 		return -1;
 	}
-	printf("buffer pas null\n");
-	printf("read_socket_tcp : s->socket_fd : %d - length : %lu\n", s->socket_fd, length);
+	// printf("read_socket_tcp : s->socket_fd : %d - length : %lu\n", s->socket_fd, length);
 	return read(s->socket_fd, (void *) buffer, length);
 }
 
@@ -155,7 +152,7 @@ int close_socket_tcp(socket_tcp *s) {
 	adresse_internet_free(s->remote);
 	if (close(s->socket_fd) == -1) {
 		fprintf(stderr, "[Erreur] -> close_socket_tcp : close : %d\n", s->socket_fd);
-		return -1;
+		// return -1;
 	}
 	s->socket_fd = -1;
 	s->is_bind = 0;

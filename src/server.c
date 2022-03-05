@@ -13,6 +13,7 @@
  * Todo : timeout client et server en émission et réception
  * EN TCP : mettre un select sur le descripteur de fichier voir cours
  * utilisé setsockopt ?
+ * // mettre un timeout  select pour accept(délai d'attente max d'un client) && receive mais dans la fonction recev de tcp mais ici direct
  * gérer les signaux
  * commenté fichiers sources commentés de vos bibliothèques et de votre serveur http, client
  * des tests de vos bibliothèques et de votre serveur,
@@ -53,30 +54,24 @@ int main() {
 	}
 	
 	socket_tcp *service = init_socket_tcp();
-	printf("[Serveur:%d] En attente de client(s)\n", pid);
 	
 	int errnum;
-	char buffer_read[BUFFER_SIZE];
-	ssize_t n;
+	printf("[Serveur:%d] En attente de client(s)\n", pid);
 	while ((errnum = accept_socket_tcp(s, service)) != -1) {
-		// mettre un timeout  select pour receive mais dans la fonction recev de tcp mais ici direct
-		if ((n = read_socket_tcp(service, buffer_read, sizeof(buffer_read))) == -1) {
-			fprintf(stderr, "[Erreur] read_socket_tcp %ld\n", n);
-			break;
-		}
-		printf("[Server:%d] réception : %s\n", pid, buffer_read);
-		
-		// printf("[Server:%d] émission : %s\n", pid, msg);
-		// write
+		thread_allocation(service);
 	}
 	if (errnum == -1) {
 		fprintf(stderr, "[Erreur] accept_socket_tcp\n");
 		return EXIT_FAILURE;
 	}
 	
+	/*if (close_socket_tcp(service) == -1) {
+		
+	}*/
 	if (close_socket_tcp(s) == -1) {
-		return EXIT_FAILURE;
+		
 	}
+	
 	
 	return EXIT_SUCCESS;
 }
@@ -110,9 +105,31 @@ void thread_allocation(socket_tcp *service) {
 }
 
 void * run_connection_processing(void *arg) {
+	if (arg == NULL) return NULL;
 	
-	// return NULL;
-	pthread_exit(NULL);
+	socket_tcp service = *(socket_tcp *) arg;
+	
+	char buffer_read[BUFFER_SIZE];
+	buffer_read[BUFFER_SIZE - 1] = '\0';
+	
+	ssize_t n;
+	if ((n = read_socket_tcp(&service, buffer_read, sizeof(buffer_read))) == -1) {
+		fprintf(stderr, "[Erreur] read_socket_tcp %ld\n", n);
+		return NULL;
+	}
+	buffer_read[strlen(buffer_read)] = '\0';
+	printf("[Server:%d] réception : %s\n", pid, buffer_read);
+	
+	if ((n = write_socket_tcp(&service, buffer_read, sizeof(char) * (strlen(buffer_read) + 1))) == -1) {
+		fprintf(stderr, "[Erreur] write_socket_tcp %ld\n", n);
+		return NULL;
+	}
+	
+	if (close_socket_tcp(&service) == -1) {
+		fprintf(stderr, "[Erreur] close_socket_tcp %d\n", service.socket_fd);
+	}
+	
+	pthread_exit(NULL); // return NULL;
 }
 
 void perror_r(int errno, const char* s) {

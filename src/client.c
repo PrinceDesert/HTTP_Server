@@ -35,6 +35,7 @@ int main() {
 	}
 	printf("[Client:%d] émission : %s\n", pid, msg);
 	char buffer_read[BUFFER_SIZE];
+	buffer_read[BUFFER_SIZE - 1] = '\0';
 	if (read_socket_tcp(s, buffer_read, sizeof(buffer_read)) == -1) {
 		fprintf(stderr, "[Erreur] read_socket_tcp\n");
 	}
