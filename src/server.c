@@ -65,9 +65,10 @@ int main() {
 		return EXIT_FAILURE;
 	}
 	
-	/*if (close_socket_tcp(service) == -1) {
-		
-	}*/
+	if (close_socket_tcp(service) == -1) {
+		fprintf(stderr, "[Erreur] close_socket_tcp %d\n", service->socket_fd);
+	}
+	
 	if (close_socket_tcp(s) == -1) {
 		
 	}
@@ -125,9 +126,7 @@ void * run_connection_processing(void *arg) {
 		return NULL;
 	}
 	
-	if (close_socket_tcp(&service) == -1) {
-		fprintf(stderr, "[Erreur] close_socket_tcp %d\n", service.socket_fd);
-	}
+	// pas de close sur la socket, elle est libéré dans le main car c'est le même pointeur service qui est utilisé et donné à chaque thread
 	
 	pthread_exit(NULL); // return NULL;
 }

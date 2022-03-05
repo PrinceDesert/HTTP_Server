@@ -161,6 +161,7 @@ int close_socket_tcp(socket_tcp *s) {
 	s->local = NULL;
 	s->remote = NULL;
 	free(s);
+	s = NULL;
 	return 0;
 }
 
