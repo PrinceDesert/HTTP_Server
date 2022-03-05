@@ -31,6 +31,10 @@ void perror_r(int errno, const char* s); // perror reetrant pour thread
 pid_t pid;
 socket_tcp *s;
 
+
+
+// #define VERSION_HTTP "HTTP/1.1" HTTP/1.1 = Version 1.1 = version à mettre dans le define
+
 int main() {
 	pid = getpid();
 	printf("==================================================\n");
