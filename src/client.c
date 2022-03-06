@@ -26,7 +26,7 @@ typedef struct {
 typedef  _http_request http_request;
 
 
-int main() {
+int main(void) {
 	pid_t pid = getpid();
 	printf("==================================================\n");
 	printf("              Lancement du client %d             \n", pid);
@@ -44,6 +44,7 @@ int main() {
 	printf("[Serveur:%d] Création de la socket %d\n", pid, s->socket_fd);
 	printf("[Client:%d] Connexion à %s:%d effectué\n", pid, ADDRESS, PORT);
 	if (connect_socket_tcp(s, ADDRESS, PORT) == -1) {
+		close_socket_tcp(s);
 		return EXIT_FAILURE;
 	}
 	

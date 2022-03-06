@@ -17,6 +17,21 @@ typedef _header_t header_t;
 #define MAX_SIZE_HEADERS_FIELDS 64
 
 
+// MIME : https://github.com/mdn/translated-content/blob/main/files/fr/web/http/basics_of_http/mime_types/common_types/index.md
+// à faire enum
+typedef struct {
+	const char type[32]; // text/plain
+	const char *extension[10]; // .txt, tx // 10 extension max
+} _mime_type_extension_t;
+typedef  _mime_type_extension_t mime_type_extension_t;
+
+typedef enum { PLAIN = 0, JPEG, PNG, ZIP} mime_t;
+static const mime_type_extension_t mime_names[] = {
+	[PLAIN]	= { "text/plain",		{".txt"} 			},
+	[JPEG] 	= {	"image/jpeg",		{".jpeg", ".jpg"}	},
+	[PNG] 	= { "image/png",		{".png"}			},
+	[ZIP] 	= { "application/zip",	{".zip"}			},
+};
 
 // Request methods
 typedef enum { GET = 0, POST} method_t;

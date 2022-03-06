@@ -49,11 +49,9 @@ socket_tcp *s;
 
 
 
-
-
 // #define VERSION_HTTP "HTTP/1.1" HTTP/1.1 = Version 1.1 = version à mettre dans le define
 
-int main() {
+int main(void) {
 	pid = getpid();
 	printf("==================================================\n");
 	printf("              Lancement du server %d              \n", pid);
