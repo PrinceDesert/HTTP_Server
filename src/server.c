@@ -7,7 +7,7 @@
 #include "../inc/adresse_internet.h"
 #include "../inc/socket_tcp.h"
 #include "../inc/config.h"
-#include "../inc/http_def.h"
+#include "../inc/http_response_def.h"
 
 /**
  * Fichier server.c
@@ -37,22 +37,26 @@ typedef  _http_response http_response;
 
 // headers["host"] = localhost -> s->getname()
 
-
+// Ressources de connexion
 void thread_allocation(socket_tcp *service); // Allocation d'un thread
 void * run_connection_processing(void *arg); // Traitement de la connexion avec le client
 void perror_r(int errno, const char* s); // perror reetrant pour thread
+
+// Traitement de la requête et l'envoie de la réponse
 void parse_commandline(char *cmd); // GET / HTTP/1.0 -> parse et affecte
+void create_response(void);
 
 
 pid_t pid;
+pthread_mutex_t mutex;
 socket_tcp *s;
-
 
 
 // #define VERSION_HTTP "HTTP/1.1" HTTP/1.1 = Version 1.1 = version à mettre dans le define
 
 int main(void) {
 	pid = getpid();
+	mutex = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
 	printf("==================================================\n");
 	printf("              Lancement du server %d              \n", pid);
 	printf("==================================================\n");
@@ -128,6 +132,9 @@ void thread_allocation(socket_tcp *service) {
 void * run_connection_processing(void *arg) {
 	if (arg == NULL) return NULL;
 	
+	// Acquisition du verrou
+	pthread_mutex_lock(&mutex);
+	
 	socket_tcp service = *(socket_tcp *) arg;
 	
 	char buffer_read[BUFFER_SIZE];
@@ -147,6 +154,9 @@ void * run_connection_processing(void *arg) {
 	}
 	
 	// pas de close sur la socket, elle est libéré dans le main car c'est le même pointeur service qui est utilisé et donné à chaque thread
+	
+	// Libération du verrou
+	pthread_mutex_unlock(&mutex);
 	
 	pthread_exit(NULL); // return NULL;
 }

@@ -15,13 +15,14 @@ SERVER = server
 CLIENT = client
 ADRESSE_INTERNET = adresse_internet
 SOCKET_TCP = socket_tcp
-
+UTILS = utils
 #---------------------------------------------------------#
 # Construction des dossiers bin et obj : make start_build #
 #---------------------------------------------------------#
 build : build_dir
 	$(CC) -c ./$(SRCDIR)/$(ADRESSE_INTERNET).c $(CFLAGS) -o ./$(OBJDIR)/$(ADRESSE_INTERNET).o
 	$(CC) -c ./$(SRCDIR)/$(SOCKET_TCP).c $(CFLAGS) -o ./$(OBJDIR)/$(SOCKET_TCP).o
+	$(CC) -c ./$(SRCDIR)/$(UTILS).c $(CFLAGS) -o ./$(OBJDIR)/$(UTILS).o
 build_dir :
 	mkdir -p ./$(OBJDIR) ./$(BINDIR) ./$(LIBDIR)
 
@@ -33,7 +34,7 @@ client : ./$(BINDIR)/$(CLIENT)
 	./$(BINDIR)/$(CLIENT) $(CONFIG_FILE)
 # Génération de l'éxécutable client et édition des liens
 ./$(BINDIR)/$(CLIENT) : ./$(OBJDIR)/$(CLIENT).o
-	$(CC) -o ./$(BINDIR)/$(CLIENT) ./$(OBJDIR)/$(CLIENT).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o ./$(OBJDIR)/$(SOCKET_TCP).o $(LDLIBS)
+	$(CC) -o ./$(BINDIR)/$(CLIENT) ./$(OBJDIR)/$(CLIENT).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o ./$(OBJDIR)/$(SOCKET_TCP).o ./$(OBJDIR)/$(UTILS).o $(LDLIBS)
 # Compilation client.c pour générer le fichier objet dans le dossier ./$(OBJDIR)
 ./$(OBJDIR)/$(CLIENT).o : ./$(SRCDIR)/$(CLIENT).c
 	$(CC) -c ./$(SRCDIR)/$(CLIENT).c $(CFLAGS) -o ./$(OBJDIR)/$(CLIENT).o
