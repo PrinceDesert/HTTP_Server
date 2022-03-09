@@ -28,7 +28,7 @@ typedef  _http_request http_request;
 
 
 // Traitement et envoie de la requête
-int create_request(void);
+int create_request(char *buffer, size_t buffer_length);
 
 
 http_request request;
@@ -56,22 +56,20 @@ int main(void) {
 		return EXIT_FAILURE;
 	}
 	
+	char buffer_send[BUFFER_SIZE];
+	create_request(buffer_send, sizeof(buffer_send));
 	
-	// char buffer_send[1024];
-	create_request();
-	
-	const char *msg = "ping";
-	if (write_socket_tcp(s, msg, sizeof(char) * strlen(msg) + 1) == -1) {
+	if (write_socket_tcp(s, buffer_send, sizeof(char) * strlen(buffer_send) + 1) == -1) {
 		fprintf(stderr, "[Erreur] write_socket_tcp\n");
 		return EXIT_FAILURE;
 	}
-	printf("[Client:%d] émission : %s\n", pid, msg);
-	char buffer_read[BUFFER_SIZE];
+	// printf("[Client:%d] émission : %s\n", pid, buffer_send);
+	char buffer_read[BUFFER_SIZE] = "\0";
 	buffer_read[BUFFER_SIZE - 1] = '\0';
 	if (read_socket_tcp(s, buffer_read, sizeof(buffer_read)) == -1) {
 		fprintf(stderr, "[Erreur] read_socket_tcp\n");
 	}
-	printf("[Client:%d] réception : %s\n", pid, buffer_read);
+	printf("[Client:%d] réception : \n%s\n", pid, buffer_read);
 	
 	printf("[Client:%d] fermeture de la socket %d de connexion\n", pid, s->socket_fd);
 	if (close_socket_tcp(s) == -1) {
@@ -82,8 +80,10 @@ int main(void) {
 }
 
 // mettre les paramètres genre method = GET que on met direct dans la struct
-int create_request() {
-	
+int create_request(char *buffer, const size_t buffer_length) {
+	if (buffer == NULL) {
+		return 0;
+	}
 	char buf_time[256];
 	if (get_gmt_time(buf_time, sizeof(buf_time)) == -1) {
 		fprintf(stderr, "[Erreur] -> create_request : get_gmt_time\n");
@@ -110,16 +110,32 @@ int create_request() {
 		return 0;
 	};
 	
-	http_request r = (http_request) {GET, "/", HTTP_PROTOCOL, {h_date, h_accept}, "<!DOCTYPE html><html lang=\"fr\"></html>"};
+	http_request r = (http_request) {GET, "./page.html", HTTP_PROTOCOL, {h_date, h_accept}, "?user=test"};
 	
-	printf("%s %s %s\n", method_names[r.method], r.path, r.protocol);
+	if (snprintf(buffer, buffer_length, "%s %s %s\n", method_names[r.method], r.path, r.protocol) == -1) {
+		fprintf(stderr, "[Erreur] -> create_request : snprintf command line\n");
+		return 0;
+	}
+	
+	// fprintf(stdout, "%s %s %s\n", method_names[r.method], r.path, r.protocol);
 	size_t i = 0;
+	size_t len = 0;
 	while (i < MAX_SIZE_HEADERS_FIELDS && strlen(r.headers[i].name) != 0) {
-		printf("%s : %s\n", r.headers[i].name, r.headers[i].value);
+		len = strlen(buffer);
+		if (snprintf(buffer + len, buffer_length - len, "%s : %s\n", r.headers[i].name, r.headers[i].value) == -1) {
+			fprintf(stderr, "[Erreur] -> create_request : snprintf headers\n");
+			return 0;
+		}
+		fprintf(stdout, "%s : %s\n", r.headers[i].name, r.headers[i].value);
 		i++;
 	}
-	printf("\n");
-	printf("%s\n", r.body);
+	len = strlen(buffer);
+	if (snprintf(buffer + len, sizeof(buffer_length) - len, "\n%s\n", r.body) == -1) {
+		fprintf(stderr, "[Erreur] -> create_request : snprintf headers\n");
+		return 0;
+	}
+	// fprintf(stdout, "\n");
+	// fprintf(stdout, "%s\n", r.body);
 	
 	return 1;
 }

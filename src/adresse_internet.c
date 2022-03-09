@@ -29,10 +29,11 @@ adresse_internet *_adresse_internet_new(sa_family_t sa_family, const int flag, c
 	struct addrinfo *result;
 	int s;
 	char s_port[MAX_NUMBERS_PORT];
-	if (snprintf(s_port, sizeof(s_port), "%d", htons(port)) < 0) {
+	if (snprintf(s_port, sizeof(s_port), "%d", port) < 0) {
 		fprintf(stderr, "Erreur snprintf s_port : %s\n", strerror(errno));
 		return NULL;
 	}
+	hints.ai_family = sa_family;
 	hints.ai_flags = flag;
 	s = getaddrinfo(nom, s_port, &hints, &result);
 	if (s != 0) {

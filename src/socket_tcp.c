@@ -45,7 +45,7 @@ int ajoute_ecoute_socket_tcp(socket_tcp *s, const char *adresse, uint16_t port) 
 		fprintf(stderr, "[Erreur] -> ajoute_ecoute_socket_tcp : s vaut NULL\n");
 		return -1;
 	}
-	adresse_internet *ad = (adresse == NULL) ? adresse_internet_any(port) : adresse_internet_new(adresse, port);	
+	adresse_internet *ad = (adresse == NULL) ? adresse_internet_any(port) : adresse_internet_new(adresse, port);
 	s->local = ad;
 	int ret = bind(s->socket_fd, (struct sockaddr *) &ad->sock_addr, sizeof(struct sockaddr_storage));
 	if (ret != 0) {
