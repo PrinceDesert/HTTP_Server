@@ -4,10 +4,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 #include "../inc/adresse_internet.h"
 #include "../inc/socket_tcp.h"
 #include "../inc/config.h"
-#include "../inc/http_response_def.h"
+#include "../inc/http_def.h"
+#include "../inc/utils.h"
 
 /**
  * Fichier server.c
@@ -46,10 +48,15 @@ void perror_r(int errno, const char* s); // perror reetrant pour thread
 int parse_request(char *buffer_request);
 int create_response(void);
 
+// Gestion des signaux de terminaisons
+void connect_signals(void);
+void handler(int signum);
+
 
 pid_t pid;
 pthread_mutex_t mutex;
 socket_tcp *s;
+socket_tcp *service;
 
 
 // #define VERSION_HTTP "HTTP/1.1" HTTP/1.1 = Version 1.1 = version à mettre dans le define
@@ -77,7 +84,9 @@ int main(void) {
 		return EXIT_FAILURE;
 	}
 	
-	socket_tcp *service = init_socket_tcp();
+	connect_signals();
+	
+	service = init_socket_tcp();
 	
 	int errnum;
 	printf("[Serveur:%d] En attente de client(s) (MAX_CLIENT_QUEUE=%d)\n", pid, SIZE_QUEUE);
@@ -90,11 +99,11 @@ int main(void) {
 	}
 	
 	if (close_socket_tcp(service) == -1) {
-		fprintf(stderr, "[Erreur] close_socket_tcp %d\n", service->socket_fd);
+		fprintf(stderr, "[Erreur] close_socket_tcp service %d\n", service->socket_fd);
 	}
 	
 	if (close_socket_tcp(s) == -1) {
-		
+		fprintf(stderr, "[Erreur] close_socket_tcp server %d\n", s->socket_fd);
 	}
 	
 	
@@ -153,7 +162,7 @@ void * run_connection_processing(void *arg) {
 		return NULL;
 	}
 	
-	if ((n = write_socket_tcp(&service, buffer_read, sizeof(char) * (strlen(buffer_read) + 1))) == -1) {
+	if ((n = write_socket_tcp(&service, "HELLO", sizeof(char) * (strlen("HELLO") + 1))) == -1) {
 		fprintf(stderr, "[Erreur] write_socket_tcp %ld\n", n);
 		return NULL;
 	}
@@ -172,35 +181,76 @@ void perror_r(int errno, const char* s) {
 }
 
 int parse_request(char *buffer_request) {
-	// http_response
-	// GET / HTTP/1.0 -> parse et affecte
-	 
-	// Récupère la command qui est la première ligne
-	// strtok = '\n'
-	// sinon erreur fomat command
-	
-	// récupère l'image et on lui envoie et le client lit les données du données
-	 
-	 // le serveur écrit la page html en dessous du header
-	 
-	char method[40];
-	char url[40];
-	char version[40];
+	if (buffer_request == NULL) {
+		fprintf(stderr, "[Erreur] parse_request : buffer_request = NULL\n");
+	}
+		 
+	char method[64];
+	char url[64];
+	char http_version_protocol[64];
 	 
 	char line[128];
 	if (sscanf(buffer_request, "%[^\n]", line) == EOF) {
 		return 0; 
 	}
-	 
-	if (sscanf(buffer_request, "%s %s %s", method, url, version) == EOF) {
+	// Récupère la ligne de commande
+	if (sscanf(line, "%s %s %s", method, url, http_version_protocol) == EOF) {
 		return 0; 
 	}
+	size_t method_names_size = sizeof(method_names) / sizeof(method_names[0]);
+	int is_found = 0;
+	// Vérification de la méthode
+	for (size_t i = 0; i < method_names_size; i++) {
+		if (strncmp(method_names[i], method, sizeof(char) * strlen(method)) == 0) {
+			is_found = 1;
+		}
+	}
+	if (!is_found) {
+		fprintf(stderr, "[Erreur] parse_request : méthode %s pas implémenté\n", method);
+		// Envoyer un header erreur
+	}
+	// Vérification de la version
+	if (strncmp(http_version_protocol, HTTP_VERSION_PROTOCOL, sizeof(char) * strlen(HTTP_VERSION_PROTOCOL)) != 0) {
+		fprintf(stderr, "[Erreur] parse_request : http version du protocole %s incorrect, la version doit être %s\n", http_version_protocol, HTTP_VERSION_PROTOCOL);
+		// Envoyer un header erreur
+	}
+	
+	
+	header_t h_tmp;
+	while (fgets(buffer_request, 1024, stdin)) {
+		while (sscanf(buffer_request, "%[^\n]", line) != EOF) {
+			printf("scanf line : \n");
+			sscanf(line, "%s:%s", h_tmp.name, h_tmp.value);
+			printf("c : %s %s\n", h_tmp.name, h_tmp.value);
+		}
+	}
+	
+	while (sscanf(buffer_request, "%[^\n]", line) != EOF) {
+		printf("scanf line : \n");
+		sscanf(line, "%s:%s", h_tmp.name, h_tmp.value);
+		printf("c : %s %s\n", h_tmp.name, h_tmp.value);
+	}
+	// sscanf(buffer_request, "%s %s %s", method, url, version) != EOF
+	
+	char buf_time[256];
+	if (get_gmt_time(buf_time, sizeof(buf_time)) == -1) {
+		fprintf(stderr, "[Erreur] -> create_request : get_gmt_time\n");
+		return 0;
+	};
+	header_t h_date;
+	if (snprintf(h_date.name, sizeof(h_date.name), "%s", request_names[DATE]) == -1) {
+		fprintf(stderr, "[Erreur] -> parse_request : snprintf %s\n", request_names[DATE]);
+		return 0;
+	};
+	if (snprintf(h_date.value, sizeof(h_date.value), "%s", buf_time) == -1) {
+		fprintf(stderr, "[Erreur] -> parse_request : snprintf %s\n", buf_time);
+		return 0;
+	};
+	
 	/*
 	if (strncmp(method, GET, strlen(method) == 0) {
 		
 	} */
-	
-	fprintf(stdout, "command : method=%s, url=%s, version=%s\n", method, url, version);
 	
 	
 	// Pour les fichiers binaires images, texte
@@ -223,3 +273,45 @@ int create_response() {
 	return 0;
 }
 
+void connect_signals() {
+	sigset_t sigset;
+	if (sigemptyset(&sigset) == -1) {
+		perror("sigemptyset");
+		exit(EXIT_FAILURE);
+	}
+	struct sigaction action;
+	action.sa_handler = handler;
+	action.sa_mask = sigset;
+	action.sa_flags = 0;
+	if (sigaction(SIGINT, &action, NULL) == -1) {
+		perror("sigaction");
+		exit(EXIT_FAILURE);
+	}
+	if (sigaction(SIGQUIT, &action, NULL) == -1) {
+		perror("sigaction");
+		exit(EXIT_FAILURE);
+	}
+	if (sigaction(SIGTERM, &action, NULL) == -1) {
+		perror("sigaction");
+		exit(EXIT_FAILURE);
+	}
+	action.sa_handler = SIG_IGN;
+	if (sigaction(SIGCHLD, &action, NULL) == -1) {
+		perror("sigaction");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void handler(int signum) {
+	if (signum != SIGINT && signum != SIGQUIT && signum != SIGTERM) {
+		fprintf(stderr, "handler : unexpected signal number %d\n", signum);
+		exit(EXIT_FAILURE);
+	}
+	if (close_socket_tcp(service) == -1) {
+		fprintf(stderr, "[Erreur] close_socket_tcp service %d\n", service->socket_fd);
+	}
+	if (close_socket_tcp(s) == -1) {
+		fprintf(stderr, "[Erreur] close_socket_tcp server %d\n", s->socket_fd);
+	}
+	exit(EXIT_SUCCESS);
+}

@@ -11,5 +11,4 @@
 
 ```make server``` : compiler et éxécuter un server
 
-```make client``` : compiler et éxécuter un client
-(possibilité d'éxécuter cette commande pour créer plusieurs clients)
+Le client se connecte sur son navigateur à l'adresse ```http://localhost:8080/```

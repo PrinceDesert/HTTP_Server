@@ -16,6 +16,20 @@
 #define MAX_NUMBERS_PORT 8
 #define BUFFER_SIZE 256
 
+/**
+	La fonction htons
+	doit être utilisé quand on positionne un port dans la structure
+	struct sockaddr_in:
+	struct sockaddr_in st;
+	st.sin_port=htons(port);
+
+	La fonction ntohs
+	doit être utilisé quand on visualise un port qui se trouve dans une structure
+	struct sockaddr_in:
+	struct sockaddr_in st;
+	printf("%d",ntohs(st.sin_port))
+*/
+
 
 	
 adresse_internet * _adresse_internet_new(sa_family_t sa_family, const int flag, const char *nom, uint16_t port);

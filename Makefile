@@ -47,7 +47,7 @@ server : ./$(BINDIR)/$(SERVER)
 	./$(BINDIR)/$(SERVER) $(CONFIG_FILE)
 # Génération de l'éxécutable demon et édition des liens
 ./$(BINDIR)/$(SERVER) : ./$(OBJDIR)/$(SERVER).o
-	$(CC) -o ./$(BINDIR)/$(SERVER) ./$(OBJDIR)/$(SERVER).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o ./$(OBJDIR)/$(SOCKET_TCP).o $(LDLIBS)
+	$(CC) -o ./$(BINDIR)/$(SERVER) ./$(OBJDIR)/$(SERVER).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o ./$(OBJDIR)/$(SOCKET_TCP).o ./$(OBJDIR)/$(UTILS).o $(LDLIBS)
 # Compilation server.c pour générer le fichier objet dans le dossier ./$(OBJDIR)
 ./$(OBJDIR)/$(SERVER).o : ./$(SRCDIR)/$(SERVER).c
 	$(CC) -c ./$(SRCDIR)/$(SERVER).c -I/inc $(CFLAGS) -o ./$(OBJDIR)/$(SERVER).o

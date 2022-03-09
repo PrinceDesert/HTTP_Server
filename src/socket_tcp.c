@@ -113,8 +113,8 @@ int accept_socket_tcp(const socket_tcp *s, socket_tcp *service) {
 		fprintf(stderr, "getnameinfo: %s\n", gai_strerror(errnum));
 		return -1;
 	}
-	printf("accept_socket_tcp : service->local : %s:%s\n", service->local->nom, service->local->service);
-	printf("accept_socket_tcp : service->remote : %s:%s\n", service->remote->nom, service->remote->service);
+	// printf("accept_socket_tcp : service->local : %s:%s\n", service->local->nom, service->local->service);
+	// printf("accept_socket_tcp : service->remote : %s:%s\n", service->remote->nom, service->remote->service);
 	return 0;
 }
 
