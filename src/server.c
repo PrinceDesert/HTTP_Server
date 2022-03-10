@@ -79,6 +79,16 @@ int main(void) {
 	}
 	adresse_internet_free(tmp);
 	printf("[Serveur:%d] Création de la socket %d\n", pid, s->socket_fd);
+	
+	// On autorise l'adresse locale à être réutilisée si on ne l'utilise plus
+	// Setting of SO_REUSEADDR should remove binding problems
+	// https://stackoverflow.com/questions/10619952/how-to-completely-destroy-a-socket-connection-in-c
+	int reuse = 1;
+	if (setsockopt(s->socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)) == -1) {
+		perror("setsockopt");
+		return EXIT_FAILURE;
+	}
+	
 	printf("[Serveur:%d] En écoute sur %s:%d\n", pid, ADDRESS, PORT);
 	if (ajoute_ecoute_socket_tcp(s, ADDRESS, PORT) == -1) {
 		return EXIT_FAILURE;
@@ -215,22 +225,35 @@ int parse_request(char *buffer_request) {
 		// Envoyer un header erreur
 	}
 	
-	
-	header_t h_tmp;
-	while (fgets(buffer_request, 1024, stdin)) {
-		while (sscanf(buffer_request, "%[^\n]", line) != EOF) {
-			printf("scanf line : \n");
-			sscanf(line, "%s:%s", h_tmp.name, h_tmp.value);
-			printf("c : %s %s\n", h_tmp.name, h_tmp.value);
+	size_t n = sizeof(char) * (strlen(line) + 1);
+	printf("n : %lu\n", n);
+	char nom[256];
+	char value[256];
+	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
+		printf("line : %s\n", line);
+		if (strchr(line, ':') != NULL) {
+			sscanf(line, "%s%s", nom, value);
+			n += sizeof(char) * (strlen(line) + 1);
+			printf("header -> name : %s - value : %s\n", nom, value);
+		} else if (strncmp(line, EMPTY_LINE, sizeof(char) * strlen(line)) == 0) {
+			// Ligne de séparation
+			printf("ligne de séparation\n");
+			break;
+		} else {
+			// Erreur dans le format
+			break;
 		}
 	}
 	
-	while (sscanf(buffer_request, "%[^\n]", line) != EOF) {
-		printf("scanf line : \n");
-		sscanf(line, "%s:%s", h_tmp.name, h_tmp.value);
-		printf("c : %s %s\n", h_tmp.name, h_tmp.value);
+	// Check du corps de la request
+	char data[256];
+	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
+		// mettre dans le buffer
+		sscanf(line, "%s", data);
+		n += sizeof(char) * (strlen(line) + 1);
+		printf("data : %s\n", data);
 	}
-	// sscanf(buffer_request, "%s %s %s", method, url, version) != EOF
+	
 	
 	char buf_time[256];
 	if (get_gmt_time(buf_time, sizeof(buf_time)) == -1) {
@@ -313,5 +336,6 @@ void handler(int signum) {
 	if (close_socket_tcp(s) == -1) {
 		fprintf(stderr, "[Erreur] close_socket_tcp server %d\n", s->socket_fd);
 	}
+	fprintf(stdout, "[Serveur:%d] Signal de terminaison reçu\n", pid);
 	exit(EXIT_SUCCESS);
 }

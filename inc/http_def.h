@@ -5,6 +5,8 @@
 // Test : printf("%s", status_names[OK]);
 
 #define HTTP_VERSION_PROTOCOL "HTTP/1.1"
+// Récupèrer en affichant le code ascii de la ligne vide de http
+#define EMPTY_LINE "\r"
 
 // FORMAT :
 // Champ : valeur 
