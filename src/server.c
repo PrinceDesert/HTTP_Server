@@ -2,9 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
+#include <limits.h>
+#include <errno.h>
 #include "../inc/adresse_internet.h"
 #include "../inc/socket_tcp.h"
 #include "../inc/config.h"
@@ -29,6 +33,8 @@
  * List des champs http : https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
 */
 
+#define DEFAULT_INDEX_FILE_NAME "index.html"
+
 
 typedef struct {
 	const char *protocol; // HTTP/1.x x = version
@@ -42,7 +48,7 @@ typedef  _http_response http_response;
 // Ressources de connexion
 void thread_allocation(socket_tcp *service); // Allocation d'un thread
 void * run_connection_processing(void *arg); // Traitement de la connexion avec le client
-void perror_r(int errno, const char* s); // perror reetrant pour thread
+void perror_r(int errnum, const char* s); // perror reetrant pour thread
 
 // Traitement de la requête et l'envoie de la réponse
 int parse_request(char *buffer_request);
@@ -153,6 +159,7 @@ void * run_connection_processing(void *arg) {
 	
 	// Acquisition du verrou
 	pthread_mutex_lock(&mutex);
+	printf("Acquisition du verrou\n");
 	
 	socket_tcp service = *(socket_tcp *) arg;
 	
@@ -169,12 +176,6 @@ void * run_connection_processing(void *arg) {
 	
 	if (!parse_request(buffer_read)) {
 		fprintf(stderr, "[Erreur] parse_request\n");
-		return NULL;
-	}
-	
-	if ((n = write_socket_tcp(&service, "HELLO", sizeof(char) * (strlen("HELLO") + 1))) == -1) {
-		fprintf(stderr, "[Erreur] write_socket_tcp %ld\n", n);
-		return NULL;
 	}
 	
 	
@@ -182,12 +183,13 @@ void * run_connection_processing(void *arg) {
 	
 	// Libération du verrou
 	pthread_mutex_unlock(&mutex);
+	printf("Libération du verrou\n");
 	
 	pthread_exit(NULL); // return NULL;
 }
 
-void perror_r(int errno, const char* s) {
-	fprintf(stderr, "[Erreur] %s: %s\n", s, strerror(errno));
+void perror_r(int errnum, const char* s) {
+	fprintf(stderr, "[Erreur] %s: %s\n", s, strerror(errnum));
 }
 
 int parse_request(char *buffer_request) {
@@ -207,6 +209,19 @@ int parse_request(char *buffer_request) {
 	if (sscanf(line, "%s %s %s", method, url, http_version_protocol) == EOF) {
 		return 0; 
 	}
+	// Rajoute le fichier par défaut, si l'url contient que '/'
+	if (strncmp(url, "/", sizeof(char) * strlen(url)) == 0) {
+		char *copy = strndup(url, sizeof(url));
+		snprintf(url, sizeof(url), "%s%s", url, DEFAULT_INDEX_FILE_NAME);
+		free(copy);
+	}
+	// Rajoute un point pour le chemin
+	if (url[0] == '/') {
+		char *copy = strndup(url, sizeof(url));
+		snprintf(url, sizeof(url), "%c%s", '.', copy);
+		free(copy);
+	}
+	
 	size_t method_names_size = sizeof(method_names) / sizeof(method_names[0]);
 	int is_found = 0;
 	// Vérification de la méthode
@@ -227,25 +242,43 @@ int parse_request(char *buffer_request) {
 	
 	size_t n = sizeof(char) * (strlen(line) + 1);
 	printf("n : %lu\n", n);
-	char nom[256];
+	char name[256];
 	char value[256];
 	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
-		printf("line : %s\n", line);
+		// printf("line : %s\n", line);
 		if (strchr(line, ':') != NULL) {
-			sscanf(line, "%s%s", nom, value);
+			sscanf(line, "%s%s", name, value);
 			n += sizeof(char) * (strlen(line) + 1);
-			printf("header -> name : %s - value : %s\n", nom, value);
+			// printf("header -> name : %s - value : %s\n", name, value);
 		} else if (strncmp(line, EMPTY_LINE, sizeof(char) * strlen(line)) == 0) {
 			// Ligne de séparation
 			printf("ligne de séparation\n");
-			break;
+			// Vérifie les lignes suivantes
+			size_t n_tmp = n + sizeof(char) * (strlen(line) + 1);
+			n += sizeof(char) * (strlen(line) + 1);
+			int is_separator_line = 1;
+			while (sscanf(buffer_request + n_tmp, "%[^\n]", line) != EOF) {
+				n_tmp += sizeof(char) * (strlen(line) + 1);
+				if (strchr(line, ':') != NULL) {
+					is_separator_line = 0;
+					break;
+				}
+			}
+			memset(line, '\0', sizeof(line));
+			if (is_separator_line) {
+				n = n_tmp;
+				break;
+			}
 		} else {
 			// Erreur dans le format
+			printf("MIME ERROR\n");
+			exit(EXIT_FAILURE);
 			break;
 		}
 	}
 	
 	// Check du corps de la request
+	printf("Debut de l'analyse du corps de la requête\n");
 	char data[256];
 	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
 		// mettre dans le buffer
@@ -270,24 +303,36 @@ int parse_request(char *buffer_request) {
 		return 0;
 	};
 	
+	printf("ouverture de l'url %s\n", url);
+	int fd = open(url, O_RDONLY);
+	if (fd == -1) {
+		perror("open");
+		return 0;
+	}
+	
+	char buf_request[PIPE_BUF];
+	size_t count_request = PIPE_BUF;
+	ssize_t n_request;
+	
 	/*
-	if (strncmp(method, GET, strlen(method) == 0) {
-		
-	} */
+	write_socket_tcp(service, "HTTP/1.1 200 OK\n", sizeof(char) * (strlen("HTTP/1.1 200 OK\n") + 1));
+	write_socket_tcp(service, "Content-Type: text/html\n", sizeof(char) * (strlen("Content-Type: text/html\n") + 1));
+	write_socket_tcp(service, "\n", 2); */
+	
+	while ((n_request = read(fd, &buf_request, count_request)) > 0) {
+		buf_request[n_request] = '\0';
+	}
+	if (n_request == -1) {
+		fprintf(stderr, "[Erreur] -> read : %s\n", strerror(errno));
+	}
 	
 	
-	// Pour les fichiers binaires images, texte
-	// Requête : GET ./paysage.png
-	/*
-	 * Réponse :
-	 * HTTP/1.1 200 OK
-	 * Content-Type : image/img
-	 * \n
-	 * 
-	 * write(réponse)
-	 * while(n = read(fd, buf, strlen(buf) + 1))
-	 *    write to socket(service, buf, n)
-	*/
+	// return 0;
+	
+	if ((write_socket_tcp(service, "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close\n\n<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta name=\"description\" content=\"\"><meta name=\"author\" content=\"\"><title>Formulaire</title></head><body><form action=\"./form.php\" method=\"post\"><div><label for=\"name\">Nom :</label><input type=\"text\" id=\"name\" name=\"user_name\"></div><div><label for=\"mail\">e-mail :</label><input type=\"email\" id=\"mail\" name=\"user_mail\"></div><div><label for=\"msg\">Message :</label><textarea id=\"msg\" name=\"user_message\"></textarea></div></form></body><script type=\"text/javascript\"></script></html>", sizeof(char) * (strlen("HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close\n\n<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta name=\"description\" content=\"\"><meta name=\"author\" content=\"\"><title>Formulaire</title></head><body><form action=\"./form.php\" method=\"post\"><div><label for=\"name\">Nom :</label><input type=\"text\" id=\"name\" name=\"user_name\"></div><div><label for=\"mail\">e-mail :</label><input type=\"email\" id=\"mail\" name=\"user_mail\"></div><div><label for=\"msg\">Message :</label><textarea id=\"msg\" name=\"user_message\"></textarea></div></form></body><script type=\"text/javascript\"></script></html>") + 1))) == -1) {
+		fprintf(stderr, "[Erreur] write_socket_tcp %ld\n", n);
+		return 0;
+	}
 	 
 	return 1;
 }
