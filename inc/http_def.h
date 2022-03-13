@@ -27,9 +27,6 @@ typedef struct {
 } _header_t;
 typedef _header_t header_t;
 
-// Nombre champ du header max pour une requête ou une réponse
-#define MAX_SIZE_HEADERS_FIELDS 64
-
 /*-------------*/
 /* Mime Format */
 /*-------------*/
@@ -71,6 +68,8 @@ typedef enum {SERVER = 0, CONNECTION, CONTENT_TYPE, CONTENT_LENGTH, DATE_RESPONS
 	[DATE_RESPONSE] = "Date"
 };*/
 
+// Nombre champ du header max pour une requête ou une réponse
+#define MAX_NUMBER_HEADERS 64
 // Remplissage
 typedef struct {
 	const char *protocol; // HTTP/1.x x = version

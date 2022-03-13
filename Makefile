@@ -21,9 +21,9 @@ UTILS = utils
 # Construction des dossiers bin et obj : make build #
 #---------------------------------------------------#
 build : build_dir
-	$(CC) -c ./$(SRCDIR)/$(ADRESSE_INTERNET).c $(CFLAGS) -o ./$(OBJDIR)/$(ADRESSE_INTERNET).o
-	$(CC) -c ./$(SRCDIR)/$(SOCKET_TCP).c $(CFLAGS) -o ./$(OBJDIR)/$(SOCKET_TCP).o
-	$(CC) -c ./$(SRCDIR)/$(UTILS).c $(CFLAGS) -o ./$(OBJDIR)/$(UTILS).o
+	$(CC) -c ./$(SRCDIR)/$(ADRESSE_INTERNET).c $(CFLAGS) -I $(INCDIR) -o ./$(OBJDIR)/$(ADRESSE_INTERNET).o
+	$(CC) -c ./$(SRCDIR)/$(SOCKET_TCP).c $(CFLAGS) -I $(INCDIR) -o ./$(OBJDIR)/$(SOCKET_TCP).o
+	$(CC) -c ./$(SRCDIR)/$(UTILS).c $(CFLAGS) -I $(INCDIR) -o ./$(OBJDIR)/$(UTILS).o
 build_dir :
 	mkdir -p ./$(OBJDIR) ./$(BINDIR) ./$(LIBDIR)
 

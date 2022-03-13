@@ -200,14 +200,14 @@ int parse_request(char *buffer_request) {
 	}
 	
 	// à remplir en fonction des valeurs
-	/*http_response res;*/
+	http_response res;
 	
 	
 	
 	char method[MAX_SIZE_METHOD];
 	char url[MAX_SIZE_URL];
 	char http_version_protocol[MAX_SIZE_HTTP_VERSION_PROTOCOL];
-	 
+		
 	char line[128];
 	if (sscanf(buffer_request, "%[^\n]", line) == EOF) {
 		return 0; 
@@ -249,14 +249,17 @@ int parse_request(char *buffer_request) {
 	
 	size_t n = sizeof(char) * (strlen(line) + 1);
 	printf("n : %lu\n", n);
-	char name[256];
-	char value[256];
-	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
+	
+	int i = 0;
+	
+	
+	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF && i < MAX_NUMBER_HEADERS) {
 		// printf("line : %s\n", line);
 		if (strchr(line, ':') != NULL) {
 			sscanf(line, "%s%s", name, value);
 			n += sizeof(char) * (strlen(line) + 1);
 			// printf("header -> name : %s - value : %s\n", name, value);
+			i++;
 		} else if (strncmp(line, EMPTY_LINE, sizeof(char) * strlen(line)) == 0) {
 			// Ligne de séparation
 			printf("ligne de séparation\n");
@@ -293,6 +296,10 @@ int parse_request(char *buffer_request) {
 		n += sizeof(char) * (strlen(line) + 1);
 		printf("data : %s\n", data);
 	}
+	
+	
+	const char *extension = get_filename_ext(url);
+	printf("Extension : %s\n", extension);
 	
 	
 	char buf_time[256];

@@ -1,7 +1,7 @@
 #ifndef SOCKET_TCP_H_
 #define SOCKET_TCP_H_
 #include <stdint.h>
-#include "socket_tcp_type.h"
+#include <socket_tcp_type.h>
 #define SIZE_QUEUE 10 
 
 /**

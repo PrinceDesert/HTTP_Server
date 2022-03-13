@@ -5,7 +5,7 @@
 #include <netinet/ip.h> // Pour in_port_t
 #define _XOPEN_SOURCE 700
 
-#include "adresse_internet_type.h"
+#include <adresse_internet_type.h>
 
 /**
  * construit une adresse internet à partir d’un éventuel nom (sous

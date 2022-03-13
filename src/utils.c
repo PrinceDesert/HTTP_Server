@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include "../inc/utils.h"
+#include <utils.h>
 
 int get_gmt_time(char *buf, size_t size) {
 	if (buf == NULL) {
@@ -27,4 +27,19 @@ int get_gmt_time(char *buf, size_t size) {
 		return -1;
 	}
 	return 0;
+}
+
+/**
+ * Source : https://stackoverflow.com/questions/5309471/getting-file-extension-in-c
+ * Example :
+ * printf("%s\n", get_filename_ext("test.tiff"));
+ * printf("%s\n", get_filename_ext("test.blah.tiff"));
+ * printf("%s\n", get_filename_ext("test."));
+ * printf("%s\n", get_filename_ext("test"));
+ * printf("%s\n", get_filename_ext("..."));
+*/
+const char *get_filename_ext(const char *filename) {
+	const char *dot = strrchr(filename, '.');
+	if (!dot || dot == filename) return "";
+	return dot + 1;
 }
