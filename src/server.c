@@ -9,11 +9,20 @@
 #include <signal.h>
 #include <limits.h>
 #include <errno.h>
-#include "../inc/adresse_internet.h"
-#include "../inc/socket_tcp.h"
-#include "../inc/config.h"
-#include "../inc/http_def.h"
-#include "../inc/utils.h"
+#include <adresse_internet.h>
+#include <socket_tcp.h>
+#include <config.h>
+#include <http_def.h>
+#include <utils.h>
+
+/* 
+	* Utilisation de l'option "-I inc" pour inclure les fichiers d'en têtes sans spécifier le chemin à chaque include 
+	#include "../inc/adresse_internet.h"
+	#include "../inc/socket_tcp.h"
+	#include "../inc/config.h"
+	#include "../inc/http_def.h"
+	#include "../inc/utils.h"
+*/
 
 /**
  * Fichier server.c
@@ -35,13 +44,6 @@
 
 #define DEFAULT_INDEX_FILE_NAME "index.html"
 
-
-typedef struct {
-	const char *protocol; // HTTP/1.x x = version
-	const status_t status_code; // 200 OK, 206 Partial Content, 404 Not Found, 401 Unauthorized, 403 Forbidden
-	header_t headers[MAX_SIZE_HEADERS_FIELDS]; // entêtes de la réponse, avec au max 64 champs
-} _http_response;
-typedef  _http_response http_response;
 
 // headers["host"] = localhost -> s->getname()
 
@@ -196,10 +198,15 @@ int parse_request(char *buffer_request) {
 	if (buffer_request == NULL) {
 		fprintf(stderr, "[Erreur] parse_request : buffer_request = NULL\n");
 	}
-		 
-	char method[64];
-	char url[64];
-	char http_version_protocol[64];
+	
+	// à remplir en fonction des valeurs
+	/*http_response res;*/
+	
+	
+	
+	char method[MAX_SIZE_METHOD];
+	char url[MAX_SIZE_URL];
+	char http_version_protocol[MAX_SIZE_HTTP_VERSION_PROTOCOL];
 	 
 	char line[128];
 	if (sscanf(buffer_request, "%[^\n]", line) == EOF) {
@@ -294,14 +301,17 @@ int parse_request(char *buffer_request) {
 		return 0;
 	};
 	header_t h_date;
-	if (snprintf(h_date.name, sizeof(h_date.name), "%s", request_names[DATE]) == -1) {
-		fprintf(stderr, "[Erreur] -> parse_request : snprintf %s\n", request_names[DATE]);
+	if (snprintf(h_date.name, sizeof(h_date.name), "%s", request_names[DATE_REQUEST]) == -1) {
+		fprintf(stderr, "[Erreur] -> parse_request : snprintf %s\n", request_names[DATE_REQUEST]);
 		return 0;
 	};
 	if (snprintf(h_date.value, sizeof(h_date.value), "%s", buf_time) == -1) {
 		fprintf(stderr, "[Erreur] -> parse_request : snprintf %s\n", buf_time);
 		return 0;
 	};
+	
+	
+	// concat with sprintf : https://stackoverflow.com/questions/2674312/how-to-append-strings-using-sprintf
 	
 	printf("ouverture de l'url %s\n", url);
 	int fd = open(url, O_RDONLY);

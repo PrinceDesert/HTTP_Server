@@ -1,15 +1,24 @@
 #ifndef HTTP_DEF_H_
 #define HTTP_DEF_H_
+#include <string.h>
 
 // Mapping enum with string : https://www.linkedin.com/pulse/mapping-enum-string-c-language-sathishkumar-duraisamy
 // Test : printf("%s", status_names[OK]);
 
+/*-------------------*/
+/* HTTP Informations */
+/*-------------------*/
 #define HTTP_VERSION_PROTOCOL "HTTP/1.1"
-// Récupèrer en affichant le code ascii de la ligne vide de http
-#define EMPTY_LINE "\r"
+#define EMPTY_LINE "\r" // Récupèrer en affichant le code ascii de la ligne vide de http
+#define MAX_SIZE_METHOD 64
+#define MAX_SIZE_URL	4096
+#define MAX_SIZE_HTTP_VERSION_PROTOCOL sizeof(char) * (strlen(HTTP_VERSION_PROTOCOL) + 1)
 
-// FORMAT :
-// Champ : valeur 
+
+/*------------------*/
+/* Header format	*/
+/* name : value		*/
+/*------------------*/
 #define MAX_SIZE_NAME_HEADER 64
 #define MAX_SIZE_VALUE_HEADER 256 
 typedef struct {
@@ -21,14 +30,15 @@ typedef _header_t header_t;
 // Nombre champ du header max pour une requête ou une réponse
 #define MAX_SIZE_HEADERS_FIELDS 64
 
-/*--------------*/
-/* General Mime */
-/*--------------*/
+/*-------------*/
+/* Mime Format */
+/*-------------*/
 // MIME : https://github.com/mdn/translated-content/blob/main/files/fr/web/http/basics_of_http/mime_types/common_types/index.md
-// à faire enum
+#define MAX_SIZE_TYPE 64
+#define MAX_SIZE_EXTENSION 32
 typedef struct {
-	const char type[32]; // text/plain
-	const char *extension[10]; // .txt, tx // 10 extension max
+	const char type[MAX_SIZE_TYPE];				// text/plain
+	const char *extension[MAX_SIZE_EXTENSION];	// .txt, tx
 } _mime_type_extension_t;
 typedef  _mime_type_extension_t mime_type_extension_t;
 
@@ -44,7 +54,6 @@ static const mime_type_extension_t mime_names[] = {
 /*-----------------*/
 /* Server Response */
 /*-----------------*/
-// Response code
 typedef enum { OK = 0, BAD_REQUEST, UNAUTHORIZED} status_t; // faire un switch case Ok : s = "200 OK"
 /* // a décommenter lors de l'utilisateur => car unused variable
 static const char *status_names[] = {
@@ -53,27 +62,35 @@ static const char *status_names[] = {
 	[UNAUTHORIZED] 	= "401 Unauthorized"
 };*/
 
-typedef enum {SERVER = 0, CONNECTION} response_names_t;
+typedef enum {SERVER = 0, CONNECTION, CONTENT_TYPE, CONTENT_LENGTH, DATE_RESPONSE} response_names_t;
 /*static const char *response_names[] = {
 	[SERVER] = "Server",
-	[CONNECTION] = "Connection"
+	[CONNECTION] = "Connection",
+	[CONTENT_TYPE] = "Content-Type",
+	[CONTENT_LENGTH] = "Content-Length",
+	[DATE_RESPONSE] = "Date"
 };*/
+
+// Remplissage
+typedef struct {
+	const char *protocol; // HTTP/1.x x = version
+	const status_t status_code; // 200 OK, 206 Partial Content, 404 Not Found, 401 Unauthorized, 403 Forbidden
+	header_t headers[MAX_SIZE_HEADERS_FIELDS]; // entêtes de la réponse, avec au max 64 champs
+} _http_response;
+typedef  _http_response http_response;
 
 /*-------------------------*/
 /* Client(Browser) Request */
 /*-------------------------*/
-// Request methods
 typedef enum { GET = 0, POST} methods_t;
-// a décommenter lors de l'utilisateur => car unused variable
-
 static const char *method_names[] = {
 	[GET] = "GET",
 	[POST] = "POST"
 };
-typedef enum {DATE = 0, ACCEPT} request_names_t;
 
+typedef enum {DATE_REQUEST = 0, ACCEPT} request_names_t;
 static const char *request_names[] = {
-	[DATE] = "Date",
+	[DATE_REQUEST] = "Date",
 	[ACCEPT] = "Accept"
 };
 
