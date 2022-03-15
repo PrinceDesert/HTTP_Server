@@ -51,13 +51,14 @@ static const mime_type_extension_t mime_names[] = {
 /*-----------------*/
 /* Server Response */
 /*-----------------*/
-typedef enum { OK = 0, BAD_REQUEST, UNAUTHORIZED} status_t; // faire un switch case Ok : s = "200 OK"
-/* // a décommenter lors de l'utilisateur => car unused variable
+typedef enum { OK = 0, BAD_REQUEST, UNAUTHORIZED, HTTP_VERSION_NOT_SUPPORTED} status_t; // faire un switch case Ok : s = "200 OK"
+// a décommenter lors de l'utilisateur => car unused variable
 static const char *status_names[] = {
-	[OK] 			= "200 OK",
-	[BAD_REQUEST] 	= "400 Bad Request",
-	[UNAUTHORIZED] 	= "401 Unauthorized"
-};*/
+	[OK] 							= "200 OK",
+	[BAD_REQUEST] 					= "400 Bad Request",
+	[UNAUTHORIZED] 					= "401 Unauthorized",
+	[HTTP_VERSION_NOT_SUPPORTED] 	= "505 HTTP Version Not Supported"
+};
 
 typedef enum {SERVER = 0, CONNECTION, CONTENT_TYPE, CONTENT_LENGTH, DATE_RESPONSE} response_names_t;
 /*static const char *response_names[] = {
@@ -73,18 +74,18 @@ typedef enum {SERVER = 0, CONNECTION, CONTENT_TYPE, CONTENT_LENGTH, DATE_RESPONS
 // Remplissage
 typedef struct {
 	const char *protocol; // HTTP/1.x x = version
-	const status_t status_code; // 200 OK, 206 Partial Content, 404 Not Found, 401 Unauthorized, 403 Forbidden
-	header_t headers[MAX_SIZE_HEADERS_FIELDS]; // entêtes de la réponse, avec au max 64 champs
+	status_t status_code; // 200 OK, 206 Partial Content, 404 Not Found, 401 Unauthorized, 403 Forbidden
+	header_t headers[MAX_NUMBER_HEADERS]; // entêtes de la réponse, avec au max 64 champs
 } _http_response;
 typedef  _http_response http_response;
 
 /*-------------------------*/
 /* Client(Browser) Request */
 /*-------------------------*/
-typedef enum { GET = 0, POST} methods_t;
+typedef enum { GET = 0, /*POST*/} methods_t;
 static const char *method_names[] = {
-	[GET] = "GET",
-	[POST] = "POST"
+	[GET] = "GET"
+	// [POST] = "POST"
 };
 
 typedef enum {DATE_REQUEST = 0, ACCEPT} request_names_t;

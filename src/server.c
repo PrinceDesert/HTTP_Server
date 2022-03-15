@@ -54,7 +54,7 @@ void perror_r(int errnum, const char* s); // perror reetrant pour thread
 
 // Traitement de la requête et l'envoie de la réponse
 int parse_request(char *buffer_request);
-int create_response(void);
+int read_file_url(char *url, char *buffer, size_t size_buffer);
 
 // Gestion des signaux de terminaisons
 void connect_signals(void);
@@ -116,9 +116,7 @@ int main(void) {
 		return EXIT_FAILURE;
 	}
 	
-	if (close_socket_tcp(service) == -1) {
-		fprintf(stderr, "[Erreur] close_socket_tcp service %d\n", service->socket_fd);
-	}
+	close_socket_tcp(service);
 	
 	if (close_socket_tcp(s) == -1) {
 		fprintf(stderr, "[Erreur] close_socket_tcp server %d\n", s->socket_fd);
@@ -180,8 +178,11 @@ void * run_connection_processing(void *arg) {
 		fprintf(stderr, "[Erreur] parse_request\n");
 	}
 	
-	
-	// pas de close sur la socket, elle est libéré dans le main car c'est le même pointeur service qui est utilisé et donné à chaque thread
+	// Ferme juste le descripteur, car service encore utilisé pour les nouvelles connexions
+	printf("Close socket \n");
+	if (close(service.socket_fd) == -1) {
+		fprintf(stderr, "[Erreur] close %d\n", service.socket_fd);
+	}
 	
 	// Libération du verrou
 	pthread_mutex_unlock(&mutex);
@@ -199,18 +200,22 @@ int parse_request(char *buffer_request) {
 		fprintf(stderr, "[Erreur] parse_request : buffer_request = NULL\n");
 	}
 	
+	char buffer_response[PIPE_BUF];
+	int length_response = 0;
 	// à remplir en fonction des valeurs
 	http_response res;
+	res.protocol = HTTP_VERSION_PROTOCOL;
+	int index_header = 0;
 	
 	
-	
+	// 1ère ligne
 	char method[MAX_SIZE_METHOD];
 	char url[MAX_SIZE_URL];
 	char http_version_protocol[MAX_SIZE_HTTP_VERSION_PROTOCOL];
 		
 	char line[128];
 	if (sscanf(buffer_request, "%[^\n]", line) == EOF) {
-		return 0; 
+		return 0;
 	}
 	// Récupère la ligne de commande
 	if (sscanf(line, "%s %s %s", method, url, http_version_protocol) == EOF) {
@@ -240,26 +245,31 @@ int parse_request(char *buffer_request) {
 	if (!is_found) {
 		fprintf(stderr, "[Erreur] parse_request : méthode %s pas implémenté\n", method);
 		// Envoyer un header erreur
+		res.status_code = BAD_REQUEST;
 	}
 	// Vérification de la version
 	if (strncmp(http_version_protocol, HTTP_VERSION_PROTOCOL, sizeof(char) * strlen(HTTP_VERSION_PROTOCOL)) != 0) {
 		fprintf(stderr, "[Erreur] parse_request : http version du protocole %s incorrect, la version doit être %s\n", http_version_protocol, HTTP_VERSION_PROTOCOL);
 		// Envoyer un header erreur
+		res.status_code = HTTP_VERSION_NOT_SUPPORTED;
 	}
+	
+	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s %s\n", res.protocol, status_names[res.status_code]);
+	
 	
 	size_t n = sizeof(char) * (strlen(line) + 1);
 	printf("n : %lu\n", n);
 	
-	int i = 0;
+
 	
 	
-	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF && i < MAX_NUMBER_HEADERS) {
+	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF && index_header < MAX_NUMBER_HEADERS) {
 		// printf("line : %s\n", line);
 		if (strchr(line, ':') != NULL) {
-			sscanf(line, "%s%s", name, value);
+			sscanf(line, "%s%s", res.headers[index_header].name, res.headers[index_header].name);
 			n += sizeof(char) * (strlen(line) + 1);
-			// printf("header -> name : %s - value : %s\n", name, value);
-			i++;
+			// printf("header -> name : %s - value : %s\n", res.headers[index_header].name, res.headers[index_header].name);
+			index_header++;
 		} else if (strncmp(line, EMPTY_LINE, sizeof(char) * strlen(line)) == 0) {
 			// Ligne de séparation
 			printf("ligne de séparation\n");
@@ -319,44 +329,68 @@ int parse_request(char *buffer_request) {
 	
 	
 	// concat with sprintf : https://stackoverflow.com/questions/2674312/how-to-append-strings-using-sprintf
+	// Ligne de séparation
+	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "\n");
 	
-	printf("ouverture de l'url %s\n", url);
-	int fd = open(url, O_RDONLY);
-	if (fd == -1) {
-		perror("open");
-		return 0;
+	char buffer_file[256];
+	if (read_file_url(url, buffer_file, sizeof(buffer_file)) == -1) {
+		fprintf(stderr, "[Erreur] -> parse_request : read_file_url %s\n", url);
 	}
 	
-	char buf_request[PIPE_BUF];
-	size_t count_request = PIPE_BUF;
-	ssize_t n_request;
+	
+	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s", buffer_file);
 	
 	/*
 	write_socket_tcp(service, "HTTP/1.1 200 OK\n", sizeof(char) * (strlen("HTTP/1.1 200 OK\n") + 1));
 	write_socket_tcp(service, "Content-Type: text/html\n", sizeof(char) * (strlen("Content-Type: text/html\n") + 1));
 	write_socket_tcp(service, "\n", 2); */
 	
-	while ((n_request = read(fd, &buf_request, count_request)) > 0) {
-		buf_request[n_request] = '\0';
-	}
-	if (n_request == -1) {
-		fprintf(stderr, "[Erreur] -> read : %s\n", strerror(errno));
-	}
 	
 	
-	// return 0;
+	// IL faut ajouter la ligne vide car sinon marche pas
+	write_socket_tcp(service, buffer_response, sizeof(char) * (strlen(buffer_response) + 1));
 	
+	
+	/*
 	if ((write_socket_tcp(service, "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close\n\n<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta name=\"description\" content=\"\"><meta name=\"author\" content=\"\"><title>Formulaire</title></head><body><form action=\"./form.php\" method=\"post\"><div><label for=\"name\">Nom :</label><input type=\"text\" id=\"name\" name=\"user_name\"></div><div><label for=\"mail\">e-mail :</label><input type=\"email\" id=\"mail\" name=\"user_mail\"></div><div><label for=\"msg\">Message :</label><textarea id=\"msg\" name=\"user_message\"></textarea></div></form></body><script type=\"text/javascript\"></script></html>", sizeof(char) * (strlen("HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close\n\n<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta name=\"description\" content=\"\"><meta name=\"author\" content=\"\"><title>Formulaire</title></head><body><form action=\"./form.php\" method=\"post\"><div><label for=\"name\">Nom :</label><input type=\"text\" id=\"name\" name=\"user_name\"></div><div><label for=\"mail\">e-mail :</label><input type=\"email\" id=\"mail\" name=\"user_mail\"></div><div><label for=\"msg\">Message :</label><textarea id=\"msg\" name=\"user_message\"></textarea></div></form></body><script type=\"text/javascript\"></script></html>") + 1))) == -1) {
 		fprintf(stderr, "[Erreur] write_socket_tcp %ld\n", n);
 		return 0;
-	}
+	}*/
 	 
 	return 1;
 }
-
-int create_response() {
+	
+int read_file_url(char *url, char *buffer, size_t size_buffer) {
+	if (url == NULL) {
+		fprintf(stderr, "[Erreur] -> read_file_url : url vaut NULL\n");
+		return -1;
+	}
+	if (buffer == NULL) {
+		fprintf(stderr, "[Erreur] -> read_file_url : buffer vaut NULL\n");
+		return -1;
+	}
+	int fd = open(url, O_RDONLY);
+	if (fd == -1) {
+		perror("open");
+		return -1;
+	}
+	char buf_read[PIPE_BUF];
+	size_t count_read = PIPE_BUF;
+	ssize_t n_read;
+	while ((n_read = read(fd, &buf_read, count_read)) > 0) {
+		buf_read[n_read] = '\0';
+		if (snprintf(buffer, sizeof(size_buffer), "%s", buf_read) == -1) {
+			fprintf(stderr, "[Erreur] -> read_file_url : snprintf buffer\n");
+			return -1;
+		}
+	}
+	if (n_read == -1) {
+		fprintf(stderr, "[Erreur] -> read : %s\n", strerror(errno));
+		return -1;
+	}
 	return 0;
 }
+
 
 void connect_signals() {
 	sigset_t sigset;
