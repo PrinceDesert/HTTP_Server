@@ -9,11 +9,11 @@
 /* HTTP Informations */
 /*-------------------*/
 #define HTTP_VERSION_PROTOCOL "HTTP/1.1"
+#define MAX_SIZE_HTTP_VERSION_PROTOCOL 9 // sizeof(char) * (strlen(HTTP_VERSION_PROTOCOL) + 1)
 #define EMPTY_LINE "\r" // Récupèrer en affichant le code ascii de la ligne vide de http
+
 #define MAX_SIZE_METHOD 64
 #define MAX_SIZE_URL	4096
-#define MAX_SIZE_HTTP_VERSION_PROTOCOL sizeof(char) * (strlen(HTTP_VERSION_PROTOCOL) + 1)
-
 
 /*------------------*/
 /* Header format	*/
@@ -41,11 +41,11 @@ typedef  _mime_type_extension_t mime_type_extension_t;
 
 typedef enum { PLAIN = 0, HTML, JPEG, PNG, ZIP} mimes_t;
 static const mime_type_extension_t mime_names[] = {
-	[PLAIN]	= { "text/plain",		{".txt"} 			},
-	[HTML]	= { "text/html",		{".html"} 			},
-	[JPEG]	= {	"image/jpeg",		{".jpeg", ".jpg"}	},
-	[PNG]	= { "image/png",		{".png"}			},
-	[ZIP]	= { "application/zip",	{".zip"}			},
+	[PLAIN]	= { "text/plain",		{"txt"} 			},
+	[HTML]	= { "text/html",		{"html"} 			},
+	[JPEG]	= {	"image/jpeg",		{"jpeg", "jpg"}		},
+	[PNG]	= { "image/png",		{"png"}				},
+	[ZIP]	= { "application/zip",	{"zip"}				},
 };
 
 /*-----------------*/
@@ -73,7 +73,7 @@ typedef enum {SERVER = 0, CONNECTION, CONTENT_TYPE, CONTENT_LENGTH, DATE_RESPONS
 #define MAX_NUMBER_HEADERS 64
 // Remplissage
 typedef struct {
-	const char *protocol; // HTTP/1.x x = version
+	char http_version_protocol[MAX_SIZE_HTTP_VERSION_PROTOCOL];
 	status_t status_code; // 200 OK, 206 Partial Content, 404 Not Found, 401 Unauthorized, 403 Forbidden
 	header_t headers[MAX_NUMBER_HEADERS]; // entêtes de la réponse, avec au max 64 champs
 } _http_response;
@@ -93,5 +93,15 @@ static const char *request_names[] = {
 	[DATE_REQUEST] = "Date",
 	[ACCEPT] = "Accept"
 };
+
+#define MAX_SIZE_BODY 1024
+typedef struct {
+	char method[MAX_SIZE_METHOD];
+	char url[MAX_SIZE_URL];
+	char http_version_protocol[MAX_SIZE_HTTP_VERSION_PROTOCOL];
+	header_t headers[MAX_NUMBER_HEADERS]; // entêtes de la requête, avec au max 64 champs
+	char body[MAX_SIZE_BODY]; // corps de la requête
+} _http_request;
+typedef  _http_request http_request;
 
 #endif
