@@ -54,8 +54,9 @@ void * run_connection_processing(void *arg); // Traitement de la connexion avec 
 void perror_r(int errnum, const char* s); // perror reetrant pour thread
 
 // Traitement de la requête et l'envoie de la réponse
-int parse_request(char *buffer_request);
-int read_file_url(char *url, char *buffer, size_t size_buffer);
+int process_request(socket_tcp *pservice, char *buffer_request);
+int read_and_write_file_url(char *url);
+int set_header(header_t *h, const char *name, const char *value);
 
 // Gestion des signaux de terminaisons
 void connect_signals(void);
@@ -127,8 +128,8 @@ int main(void) {
 	return EXIT_SUCCESS;
 }
 
-void thread_allocation(socket_tcp *service) {
-	if (service == NULL) return;
+void thread_allocation(socket_tcp *pservice) {
+	if (pservice == NULL) return;
 	fprintf(stdout, "[Serveur:%d] Allocation d'une ressource (thread)\n", pid);
 	int return_value;
 	pthread_attr_t attr;
@@ -144,7 +145,7 @@ void thread_allocation(socket_tcp *service) {
 	}
 	pthread_t th;
 	// Création du thread avec sa start_routine service
-	if ((return_value = pthread_create(&th, &attr, run_connection_processing, (void *) service)) != 0) {
+	if ((return_value = pthread_create(&th, &attr, run_connection_processing, (void *) pservice)) != 0) {
 		perror_r(return_value, "pthead_create");
 		exit(EXIT_FAILURE);
 	}
@@ -175,8 +176,8 @@ void * run_connection_processing(void *arg) {
 	buffer_read[strlen(buffer_read)] = '\0';
 	fprintf(stdout, "[Server:%d] réception : \n%s\n", pid, buffer_read);
 	
-	if (!parse_request(buffer_read)) {
-		fprintf(stderr, "[Erreur] parse_request\n");
+	if (!process_request(&service, buffer_read)) {
+		fprintf(stderr, "[Erreur] process_request\n");
 	}
 	
 	// Ferme juste le descripteur, car service encore utilisé pour les nouvelles connexions
@@ -196,19 +197,14 @@ void perror_r(int errnum, const char* s) {
 	fprintf(stderr, "[Erreur] %s: %s\n", s, strerror(errnum));
 }
 
-int parse_request(char *buffer_request) {
+int process_request(socket_tcp *pservice, char *buffer_request) {
 	if (buffer_request == NULL) {
-		fprintf(stderr, "[Erreur] parse_request : buffer_request = NULL\n");
+		fprintf(stderr, "[Erreur] process_request : buffer_request = NULL\n");
 	}
-	
-	char buffer_response[PIPE_BUF];
-	int length_response = 0;
-	// à remplir en fonction des valeurs
-	http_response response;
-	
+		
 	// 1ère ligne
 	http_request request;
-	int index_request_header = 0;
+	size_t index_request_header = 0;
 		
 	char line[128];
 	if (sscanf(buffer_request, "%[^\n]", line) == EOF) {
@@ -218,6 +214,21 @@ int parse_request(char *buffer_request) {
 	if (sscanf(line, "%s %s %s", request.method, request.url, request.http_version_protocol) == EOF) {
 		return 0; 
 	}
+	// METHOD	
+	size_t method_names_size = sizeof(method_names) / sizeof(method_names[0]);
+	int is_found = 0;
+	// Vérification de la méthode
+	for (size_t i = 0; i < method_names_size; i++) {
+		if (strncmp(method_names[i], request.method, sizeof(char) * strlen(request.method)) == 0) {
+			is_found = 1;
+		}
+	}
+	if (!is_found) {
+		fprintf(stderr, "[Erreur] process_request : méthode %s pas implémenté\n", request.method);
+		// Envoyer un header erreur
+		response.status_code = BAD_REQUEST;
+	}
+	// URL
 	// Rajoute le fichier par défaut, si l'url contient que '/'
 	if (strncmp(request.url, "/", sizeof(char) * strlen(request.url)) == 0) {
 		char *copy = strndup(request.url, sizeof(request.url));
@@ -230,41 +241,49 @@ int parse_request(char *buffer_request) {
 		snprintf(request.url, sizeof(request.url), "%c%s", '.', copy);
 		free(copy);
 	}
-	
-	size_t method_names_size = sizeof(method_names) / sizeof(method_names[0]);
-	int is_found = 0;
-	// Vérification de la méthode
-	for (size_t i = 0; i < method_names_size; i++) {
-		if (strncmp(method_names[i], request.method, sizeof(char) * strlen(request.method)) == 0) {
-			is_found = 1;
-		}
+	int fd = open(request.url, O_RDONLY);
+	if (fd == -1) {
+		response.status_code = NOT_FOUND;
 	}
-	if (!is_found) {
-		fprintf(stderr, "[Erreur] parse_request : méthode %s pas implémenté\n", request.method);
-		// Envoyer un header erreur
-		response.status_code = BAD_REQUEST;
-	}
+	close(fd);
+	// VERSION
 	// Vérification de la version
 	if (strncmp(request.http_version_protocol, HTTP_VERSION_PROTOCOL, sizeof(char) * strlen(HTTP_VERSION_PROTOCOL)) != 0) {
-		fprintf(stderr, "[Erreur] parse_request : http version du protocole %s incorrect, la version doit être %s\n", request.http_version_protocol, HTTP_VERSION_PROTOCOL);
+		fprintf(stderr, "[Erreur] process_request : http version du protocole %s incorrect, la version doit être %s\n", request.http_version_protocol, HTTP_VERSION_PROTOCOL);
 		// Envoyer un header erreur
 		response.status_code = HTTP_VERSION_NOT_SUPPORTED;
 	} else {
 		snprintf(response.http_version_protocol, sizeof(response.http_version_protocol), "%s", HTTP_VERSION_PROTOCOL);
 	}
 	
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s %s\n", response.http_version_protocol, status_names[response.status_code]);
-	
 	size_t n = sizeof(char) * (strlen(line) + 1);
 	printf("n : %lu\n", n);
 	
-	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF && index_request_header < MAX_NUMBER_HEADERS) {
+	size_t size_request_headers = sizeof(request_names) / sizeof(request_names[0]);
+	
+	int errnum; 
+	while ((errnum = sscanf(buffer_request + n, "%[^\n]", line)) != EOF && index_request_header < MAX_NUMBER_HEADERS) {
 		// printf("line : %s\n", line);
 		if (strchr(line, ':') != NULL) {
-			sscanf(line, "%s%s", request.headers[index_request_header].name, request.headers[index_request_header].name);
+			if (sscanf(line, "%s%s", request.headers[index_request_header].name, request.headers[index_request_header].value) == EOF) {
+				response.status_code = BAD_REQUEST;
+				break;
+			}
+			// Enlève le caractère ':'
+			request.headers[index_request_header].name[strlen(request.headers[index_request_header].name) - 1] = '\0';
+			
+			// Vérifie qu'il existe dans les headers traités
+			for (size_t i = 0; i < size_request_headers; i++) {
+				if (strncmp(request.headers[index_request_header].name, request_names[i], 
+					sizeof(char) * (strlen(request.headers[index_request_header].name))) == 0) {
+					index_request_header++;
+					break;
+					printf("header match : %s\n", request.headers[index_request_header].name);
+				}
+				printf("header analyse : %s\n", request.headers[index_request_header].name);
+			}
 			n += sizeof(char) * (strlen(line) + 1);
 			// printf("header -> name : %s - value : %s\n", request.headers[index_request_header].name, request.headers[index_request_header].name);
-			index_request_header++;
 		} else if (strncmp(line, EMPTY_LINE, sizeof(char) * strlen(line)) == 0) {
 			// Ligne de séparation
 			printf("ligne de séparation\n");
@@ -286,15 +305,23 @@ int parse_request(char *buffer_request) {
 			}
 		} else {
 			// Erreur dans le format
-			printf("MIME ERROR\n");
-			exit(EXIT_FAILURE);
+			response.status_code = BAD_REQUEST;
 			break;
 		}
+	}
+	if (errnum == EOF) {
+		response.status_code = BAD_REQUEST;
+	}
+	
+	
+	// Vérification affichage des headers
+	for (size_t i = 0; i < index_request_header; i++) {
+		printf("[VERIF] %s: %s\n", request.headers[i].name, request.headers[i].value);
 	}
 	
 	// Check du corps de la request
 	printf("Debut de l'analyse du corps de la requête\n");
-	char data[256];
+	char data[PIPE_BUF];
 	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
 		// mettre dans le buffer
 		sscanf(line, "%s", data);
@@ -306,6 +333,13 @@ int parse_request(char *buffer_request) {
 	const char *extension = get_filename_ext(request.url);
 	printf("Extension : %s\n", extension);
 	
+	// Création des headers de répoonse (en têtes)
+	
+	char buffer_response[900000];
+	// à remplir en fonction des valeurs
+	http_response response;
+	size_t index_response_header = 0;
+	
 	// Date
 	char buf_time[256];
 	if (get_gmt_time(buf_time, sizeof(buf_time)) == -1) {
@@ -313,61 +347,60 @@ int parse_request(char *buffer_request) {
 		return 0;
 	};
 	header_t h_date;
-	snprintf(h_date.name, sizeof(h_date.name), "%s", request_names[DATE_REQUEST]);
-	snprintf(h_date.value, sizeof(h_date.value), "%s", buf_time);
-	
-	
-	
-	/*
-	get_mime_extension()
-	
-	size_t mimes_names_size = sizeof(mime_names) / sizeof(mime_names[0]);
-	int is_found = 0;
-	for (size_t i = 0; i < mimes_names_size; i++) {
-		if (strncmp(mime_names[i], extension, sizeof(char) * strlen(extension)) == 0) {
-			is_found = 1;
+	if (set_header(&h_date, response_names[DATE_RESPONSE], buf_time) == 0) {
+		response.headers[index_response_header++] = h_date;
+	}
+	printf("%s : %s\n", h_date.name, h_date.value);
+	// Server
+	header_t h_server; 
+	if (set_header(&h_server, response_names[SERVER], pservice->remote->nom) == 0) {
+		response.headers[index_response_header++] = h_server;
+	}
+	// Content-Type
+	header_t h_content_type;
+	if (set_header(&h_content_type, response_names[CONTENT_TYPE], "text/html") == 0) {
+		// faire un truc ici genre renvoyé une 401
+		response.headers[index_response_header++] = h_content_type;
+	}
+	// Content-Length
+	header_t h_content_length;
+	struct stat st;
+	if (stat(request.url, &st) != -1) {
+		char number[1024];
+		if (snprintf(number, sizeof(number), "%ld", st.st_size) != -1) {
+			if (set_header(&h_content_type, response_names[CONTENT_LENGTH], number) == 0) {
+				response.headers[index_response_header++] = h_content_length;
+			}
+		} else {
+			fprintf(stderr, "[Erreur] process_request : stat number\n");
 		}
-	}*/
-	
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "Content-Type: image/png\n");
-	
-	// Ligne de séparation
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "\n");
-	
-	char buffer_file[1024];
-	if (read_file_url(request.url, buffer_file, sizeof(buffer_file)) == -1) {
-		fprintf(stderr, "[Erreur] -> parse_request : read_file_url %s\n", request.url);
+	} else {
+		fprintf(stderr, "[Erreur] process_request : stat %s\n", request.url);
 	}
 	
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s", buffer_file);
+	// Concaténation des headers
+	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s %s\n", response.http_version_protocol, status_names[response.status_code]);
 	
-	/*
-	write_socket_tcp(service, "HTTP/1.1 200 OK\n", sizeof(char) * (strlen("HTTP/1.1 200 OK\n") + 1));
-	write_socket_tcp(service, "Content-Type: text/html\n", sizeof(char) * (strlen("Content-Type: text/html\n") + 1));
-	write_socket_tcp(service, "\n", 2); */
+	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s: %s\n", h_date.name, h_date.value);
+	// faire un for pour chaque header avec index_response
 	
-	printf("%s\n", buffer_response);
-	printf("%lu\n", strlen(buffer_response));
-	// il faut ajouter la ligne vide car sinon marche pas
-	write_socket_tcp(service, buffer_response, sizeof(char) * (strlen(buffer_response) + 1));
+	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "Content-Type: text/html\n");
+	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "\n"); // Ligne de séparation*/
+	// Envoie du header
+	write_socket_tcp(service, buffer_response, sizeof(char) * (strlen(buffer_response)));
+	
+
+	if (read_and_write_file_url(request.url) == -1) {
+		fprintf(stderr, "[Erreur] -> process_request : read_file_url %s\n", request.url);
+	}
 	
 	
-	/*
-	if ((write_socket_tcp(service, "HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close\n\n<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta name=\"description\" content=\"\"><meta name=\"author\" content=\"\"><title>Formulaire</title></head><body><form action=\"./form.php\" method=\"post\"><div><label for=\"name\">Nom :</label><input type=\"text\" id=\"name\" name=\"user_name\"></div><div><label for=\"mail\">e-mail :</label><input type=\"email\" id=\"mail\" name=\"user_mail\"></div><div><label for=\"msg\">Message :</label><textarea id=\"msg\" name=\"user_message\"></textarea></div></form></body><script type=\"text/javascript\"></script></html>", sizeof(char) * (strlen("HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close\n\n<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta name=\"description\" content=\"\"><meta name=\"author\" content=\"\"><title>Formulaire</title></head><body><form action=\"./form.php\" method=\"post\"><div><label for=\"name\">Nom :</label><input type=\"text\" id=\"name\" name=\"user_name\"></div><div><label for=\"mail\">e-mail :</label><input type=\"email\" id=\"mail\" name=\"user_mail\"></div><div><label for=\"msg\">Message :</label><textarea id=\"msg\" name=\"user_message\"></textarea></div></form></body><script type=\"text/javascript\"></script></html>") + 1))) == -1) {
-		fprintf(stderr, "[Erreur] write_socket_tcp %ld\n", n);
-		return 0;
-	}*/
-	 
 	return 1;
 }
 	
-int read_file_url(char *url, char *buffer, size_t size_buffer) {
+int read_and_write_file_url(char *url) {
 	if (url == NULL) {
 		fprintf(stderr, "[Erreur] -> read_file_url : url vaut NULL\n");
-		return -1;
-	}
-	if (buffer == NULL) {
-		fprintf(stderr, "[Erreur] -> read_file_url : buffer vaut NULL\n");
 		return -1;
 	}
 	int fd = open(url, O_RDONLY);
@@ -376,15 +409,32 @@ int read_file_url(char *url, char *buffer, size_t size_buffer) {
 		return -1;
 	}
 	char buf_read[PIPE_BUF];
-	size_t count_read = PIPE_BUF;
+	size_t count_read = sizeof(buf_read);
 	ssize_t n_read;
-	if ((n_read = read(fd, &buf_read, count_read)) > 0) {
-		buf_read[n_read] = '\0';
-		if (strncpy(buffer, buf_read, size_buffer) == NULL) {
-			fprintf(stderr, "[Erreur] -> read_file_url : strncpy : %s\n", strerror(errno));
+	while ((n_read = read(fd, &buf_read, count_read)) > 0) {
+		if (write_socket_tcp(service, &buf_read, (size_t) n_read) == -1) {
+			fprintf(stderr, "[Erreur] -> read_file_url : write_socket_tcp\n");
 			return -1;
 		}
 	}
+	
+	/*char *idx = NULL;
+	int length = 0;
+	char tmp[size_buffer + 127];
+	while ((n_read = read(fd, &buf_read, count_read)) > 0) {
+		buf_read[n_read] = '\0';
+		if (strncpy(buffer, (char *) buf_read, (size_t) n_read) == NULL) {
+			fprintf(stderr, "[Erreur] -> read_file_url : strncpy : %s\n", strerror(errno));
+			return -1;
+		}
+		idx = buf_read;
+		while (*idx) {
+			length += sprintf(tmp + length, "%s", idx);
+			strncat(buffer+length, (char *) tmp, (long unsigned int)length);
+			idx += strlen(idx) + 1;
+		}
+	}*/
+	
 	if (n_read == -1) {
 		fprintf(stderr, "[Erreur] -> read_file_url : read : %s\n", strerror(errno));
 		return -1;
@@ -392,6 +442,26 @@ int read_file_url(char *url, char *buffer, size_t size_buffer) {
 	return 0;
 }
 	
+int set_header(header_t *h, const char *name, const char *value) {
+	if (name == NULL) {
+		fprintf(stderr, "[Erreur] -> set_header : name vaut NULL\n");
+		return -1;
+	}
+	if (value == NULL) {
+		fprintf(stderr, "[Erreur] -> set_header : name vaut NULL\n");
+		return -1;
+	}
+	if (snprintf(h->name, sizeof(h->name), "%s", name) == -1) {
+		fprintf(stderr, "[Erreur] -> set_header : snprintf %s(name)\n", name);
+		return -1;
+	}
+	if (snprintf(h->value, sizeof(h->value), "%s", value) == -1) {
+		fprintf(stderr, "[Erreur] -> set_header : snprintf %s(value)\n", value);
+		return -1;
+	}
+	return 0;
+}
+
 void connect_signals() {
 	sigset_t sigset;
 	if (sigemptyset(&sigset) == -1) {
