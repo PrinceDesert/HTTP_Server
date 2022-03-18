@@ -7,8 +7,10 @@
 ## Configuration
 ```make mrproper``` : supprimer tous les fichiers générés
 
-```make start_build``` : créer les dossiers obj, lib et bin
+```make build``` : créer les dossiers obj, lib et bin
 
+## Éxécution
 ```make server``` : compiler et éxécuter un server
 
 Le client se connecte sur son navigateur à l'adresse ```http://localhost:8080/```
+Il peut ensuite envoyer des requêtes GET comme ceci ```http://localhost:8080/http.png```
