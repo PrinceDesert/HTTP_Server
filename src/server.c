@@ -54,7 +54,12 @@ void * run_connection_processing(void *arg); // Traitement de la connexion avec 
 void perror_r(int errnum, const char* s); // perror reetrant pour thread
 
 // Traitement de la requête et l'envoie de la réponse
-int process_request(socket_tcp *pservice, char *buffer_request);
+void process_request_and_response(socket_tcp *pservice, char *buffer_request);
+int check_request_method(const char *request_method);
+int check_request_url(char *request_url, size_t size_request_url);
+int check_request_http_version_protocol(char *http_version_protocol);
+char *get_mime_type_extension(const char *extension);
+
 int read_and_write_file_url(char *url);
 int set_header(header_t *h, const char *name, const char *value);
 
@@ -165,8 +170,8 @@ void * run_connection_processing(void *arg) {
 	
 	socket_tcp service = *(socket_tcp *) arg;
 	
-	char buffer_read[BUFFER_SIZE];
-	buffer_read[BUFFER_SIZE - 1] = '\0';
+	char buffer_read[PIPE_BUF];
+	buffer_read[PIPE_BUF - 1] = '\0';
 	
 	ssize_t n;
 	if ((n = read_socket_tcp(&service, buffer_read, sizeof(buffer_read))) == -1) {
@@ -176,9 +181,8 @@ void * run_connection_processing(void *arg) {
 	buffer_read[strlen(buffer_read)] = '\0';
 	fprintf(stdout, "[Server:%d] réception : \n%s\n", pid, buffer_read);
 	
-	if (!process_request(&service, buffer_read)) {
-		fprintf(stderr, "[Erreur] process_request\n");
-	}
+	process_request_and_response(&service, buffer_read);
+	
 	
 	// Ferme juste le descripteur, car service encore utilisé pour les nouvelles connexions
 	printf("Close socket \n");
@@ -197,68 +201,45 @@ void perror_r(int errnum, const char* s) {
 	fprintf(stderr, "[Erreur] %s: %s\n", s, strerror(errnum));
 }
 
-int process_request(socket_tcp *pservice, char *buffer_request) {
+void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	if (buffer_request == NULL) {
-		fprintf(stderr, "[Erreur] process_request : buffer_request = NULL\n");
+		fprintf(stderr, "[Erreur] process_request_and_response : buffer_request = NULL\n");
 	}
-		
+	http_response response;
+	response.status_code = OK;
+	size_t index_response_header = 0;
+	int length_response = 0;
 	// 1ère ligne
 	http_request request;
 	size_t index_request_header = 0;
 		
-	char line[128];
+	char line[1024];
 	if (sscanf(buffer_request, "%[^\n]", line) == EOF) {
-		return 0;
+		fprintf(stderr, "[Erreur] process_request_and_response : sscanf line\n");
+		return;
 	}
 	// Récupère la ligne de commande
 	if (sscanf(line, "%s %s %s", request.method, request.url, request.http_version_protocol) == EOF) {
-		return 0; 
+		return; 
 	}
-	// METHOD	
-	size_t method_names_size = sizeof(method_names) / sizeof(method_names[0]);
-	int is_found = 0;
-	// Vérification de la méthode
-	for (size_t i = 0; i < method_names_size; i++) {
-		if (strncmp(method_names[i], request.method, sizeof(char) * strlen(request.method)) == 0) {
-			is_found = 1;
-		}
+	
+	if (check_request_method(request.method) == -1) {
+		response.status_code = NOT_IMPLEMENTED;
 	}
-	if (!is_found) {
-		fprintf(stderr, "[Erreur] process_request : méthode %s pas implémenté\n", request.method);
-		// Envoyer un header erreur
-		response.status_code = BAD_REQUEST;
-	}
-	// URL
-	// Rajoute le fichier par défaut, si l'url contient que '/'
-	if (strncmp(request.url, "/", sizeof(char) * strlen(request.url)) == 0) {
-		char *copy = strndup(request.url, sizeof(request.url));
-		snprintf(request.url, sizeof(request.url), "%s%s", request.url, DEFAULT_INDEX_FILE_NAME);
-		free(copy);
-	}
-	// Rajoute un point pour le chemin
-	if (request.url[0] == '/') {
-		char *copy = strndup(request.url, sizeof(request.url));
-		snprintf(request.url, sizeof(request.url), "%c%s", '.', copy);
-		free(copy);
-	}
-	int fd = open(request.url, O_RDONLY);
-	if (fd == -1) {
+	if (check_request_url(request.url, sizeof(request.url)) == -1) {
 		response.status_code = NOT_FOUND;
 	}
-	close(fd);
-	// VERSION
-	// Vérification de la version
-	if (strncmp(request.http_version_protocol, HTTP_VERSION_PROTOCOL, sizeof(char) * strlen(HTTP_VERSION_PROTOCOL)) != 0) {
-		fprintf(stderr, "[Erreur] process_request : http version du protocole %s incorrect, la version doit être %s\n", request.http_version_protocol, HTTP_VERSION_PROTOCOL);
-		// Envoyer un header erreur
+	if (check_request_http_version_protocol(request.http_version_protocol) == -1) {
 		response.status_code = HTTP_VERSION_NOT_SUPPORTED;
 	} else {
-		snprintf(response.http_version_protocol, sizeof(response.http_version_protocol), "%s", HTTP_VERSION_PROTOCOL);
+		if (snprintf(response.http_version_protocol, sizeof(response.http_version_protocol), "%s", request.http_version_protocol) == -1) {
+			sprintf(response.http_version_protocol, "%s", HTTP_VERSION_PROTOCOL);
+		}
 	}
 	
-	size_t n = sizeof(char) * (strlen(line) + 1);
-	printf("n : %lu\n", n);
 	
+	
+	size_t n = sizeof(char) * (strlen(line) + 1);
 	size_t size_request_headers = sizeof(request_names) / sizeof(request_names[0]);
 	
 	int errnum; 
@@ -270,23 +251,21 @@ int process_request(socket_tcp *pservice, char *buffer_request) {
 				break;
 			}
 			// Enlève le caractère ':'
+			trim(request.headers[index_request_header].name);
 			request.headers[index_request_header].name[strlen(request.headers[index_request_header].name) - 1] = '\0';
-			
+			trim(request.headers[index_request_header].name);
 			// Vérifie qu'il existe dans les headers traités
 			for (size_t i = 0; i < size_request_headers; i++) {
 				if (strncmp(request.headers[index_request_header].name, request_names[i], 
 					sizeof(char) * (strlen(request.headers[index_request_header].name))) == 0) {
 					index_request_header++;
 					break;
-					printf("header match : %s\n", request.headers[index_request_header].name);
 				}
-				printf("header analyse : %s\n", request.headers[index_request_header].name);
 			}
 			n += sizeof(char) * (strlen(line) + 1);
 			// printf("header -> name : %s - value : %s\n", request.headers[index_request_header].name, request.headers[index_request_header].name);
 		} else if (strncmp(line, EMPTY_LINE, sizeof(char) * strlen(line)) == 0) {
 			// Ligne de séparation
-			printf("ligne de séparation\n");
 			// Vérifie les lignes suivantes
 			size_t n_tmp = n + sizeof(char) * (strlen(line) + 1);
 			n += sizeof(char) * (strlen(line) + 1);
@@ -313,39 +292,32 @@ int process_request(socket_tcp *pservice, char *buffer_request) {
 		response.status_code = BAD_REQUEST;
 	}
 	
-	
-	// Vérification affichage des headers
-	for (size_t i = 0; i < index_request_header; i++) {
-		printf("[VERIF] %s: %s\n", request.headers[i].name, request.headers[i].value);
-	}
-	
-	// Check du corps de la request
-	printf("Debut de l'analyse du corps de la requête\n");
+	// Check du corps de la request : pas implémenté
+	/*printf("Debut de l'analyse du corps de la requête\n");
 	char data[PIPE_BUF];
 	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
 		// mettre dans le buffer
 		sscanf(line, "%s", data);
 		n += sizeof(char) * (strlen(line) + 1);
 		printf("data : %s\n", data);
-	}
+	}*/
 	
+	/**
+	 * If Last Modified Since et mettre dans la réponse Last Modified
+	*/
 	
-	const char *extension = get_filename_ext(request.url);
-	printf("Extension : %s\n", extension);
 	
 	// Création des headers de répoonse (en têtes)
 	
 	char buffer_response[900000];
 	// à remplir en fonction des valeurs
-	http_response response;
-	size_t index_response_header = 0;
 	
 	// Date
 	char buf_time[256];
 	if (get_gmt_time(buf_time, sizeof(buf_time)) == -1) {
 		fprintf(stderr, "[Erreur] -> create_request : get_gmt_time\n");
-		return 0;
-	};
+		sprintf(buf_time, "%s", "error_date");
+	}
 	header_t h_date;
 	if (set_header(&h_date, response_names[DATE_RESPONSE], buf_time) == 0) {
 		response.headers[index_response_header++] = h_date;
@@ -357,9 +329,14 @@ int process_request(socket_tcp *pservice, char *buffer_request) {
 		response.headers[index_response_header++] = h_server;
 	}
 	// Content-Type
+	const char *extension = get_filename_ext(request.url);
+	const char *mime_type = get_mime_type_extension(extension); 
+	if (mime_type == NULL) {
+		response.status_code = BAD_REQUEST;
+		mime_type = (const char *) mime_names[PLAIN].type;
+	}
 	header_t h_content_type;
-	if (set_header(&h_content_type, response_names[CONTENT_TYPE], "text/html") == 0) {
-		// faire un truc ici genre renvoyé une 401
+	if (set_header(&h_content_type, response_names[CONTENT_TYPE], mime_type) == 0) {
 		response.headers[index_response_header++] = h_content_type;
 	}
 	// Content-Length
@@ -368,34 +345,115 @@ int process_request(socket_tcp *pservice, char *buffer_request) {
 	if (stat(request.url, &st) != -1) {
 		char number[1024];
 		if (snprintf(number, sizeof(number), "%ld", st.st_size) != -1) {
-			if (set_header(&h_content_type, response_names[CONTENT_LENGTH], number) == 0) {
+			if (set_header(&h_content_length, response_names[CONTENT_LENGTH], number) == 0) {
 				response.headers[index_response_header++] = h_content_length;
 			}
 		} else {
-			fprintf(stderr, "[Erreur] process_request : stat number\n");
+			fprintf(stderr, "[Erreur] process_request_and_response : stat number\n");
 		}
 	} else {
-		fprintf(stderr, "[Erreur] process_request : stat %s\n", request.url);
+		fprintf(stderr, "[Erreur] process_request_and_response : stat %s\n", request.url);
 	}
 	
 	// Concaténation des headers
 	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s %s\n", response.http_version_protocol, status_names[response.status_code]);
-	
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s: %s\n", h_date.name, h_date.value);
-	// faire un for pour chaque header avec index_response
-	
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "Content-Type: text/html\n");
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "\n"); // Ligne de séparation*/
-	// Envoie du header
-	write_socket_tcp(service, buffer_response, sizeof(char) * (strlen(buffer_response)));
-	
-
-	if (read_and_write_file_url(request.url) == -1) {
-		fprintf(stderr, "[Erreur] -> process_request : read_file_url %s\n", request.url);
+	printf("Affichage des headers\n");
+	for (size_t i = 0; i < index_response_header; i++) {
+		printf("%s: %s\n", response.headers[i].name, response.headers[i].value);
+		length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s: %s\n", response.headers[i].name, response.headers[i].value);
 	}
+	// Ligne de séparation
+	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "\n");
+	// Envoie du header
+	write_socket_tcp(service, buffer_response, sizeof(char) * (strlen(buffer_response)));	
+	// Lecture et envoie du fichier
+	if (read_and_write_file_url(request.url) == -1) {
+		fprintf(stderr, "[Erreur] -> process_request_and_response : read_file_url %s\n", request.url);
+	}
+}
 	
+/**
+ * Vérifie que la méthode de la requête client est implémenté
+*/
+int check_request_method(const char *request_method) {
+	if (request_method == NULL) {
+		fprintf(stderr, "[Erreur] check_request_method : request_method vaut NULL\n");
+		return -1;
+	}
+	size_t method_names_size = sizeof(method_names) / sizeof(method_names[0]);
+	// Vérification de la méthode
+	for (size_t i = 0; i < method_names_size; i++) {
+		if (strncmp(method_names[i], request_method, sizeof(char) * strlen(request_method)) == 0) {
+			return 0;
+		}
+	}
+	fprintf(stderr, "[Erreur] process_request_and_response : méthode %s pas implémenté\n", request_method);
+	return -1;
+}
 	
-	return 1;
+/**
+ * Vérifie que l'url est syntaxiquement valide, et vérifie que le fichier est lisible
+*/
+int check_request_url(char *request_url, size_t size_request_url) {
+	if (request_url == NULL) {
+		fprintf(stderr, "[Erreur] check_request_url : request_url vaut NULL\n");
+		return -1;
+	}
+	// Rajoute le fichier par défaut, si l'url contient que '/' -> "/index.html"
+	if (strncmp(request_url, "/", sizeof(char) * strlen(request_url)) == 0) {
+		if (snprintf(request_url, size_request_url, "%s%s", request_url, DEFAULT_INDEX_FILE_NAME) == -1) {
+			fprintf(stderr, "[Erreur] check_request_url : snprintf adding slash\n");
+			return -1;
+		}
+	}
+	// Rajoute un point pour le chemin -> "./index.html"
+	if (request_url[0] == '/') {
+		char *copy = strndup(request_url, sizeof(char) * (strlen(request_url) + 1));
+		if (snprintf(request_url, size_request_url, "%c%s", '.', copy) == -1) {
+			fprintf(stderr, "[Erreur] check_request_url : snprintf adding dot\n");
+			return -1;
+		}
+		free(copy);
+	}
+	// Vérifie qu'il est lisible
+	int fd = open(request_url, O_RDONLY);
+	if (fd == -1) {
+		return -1;
+	}
+	close(fd);
+	return 0;
+}
+	
+/**
+ * Vérifie la version du protocole HTTP
+*/
+int check_request_http_version_protocol(char *http_version_protocol) {
+	if (strncmp(http_version_protocol, HTTP_VERSION_PROTOCOL, sizeof(char) * strlen(HTTP_VERSION_PROTOCOL)) != 0) {
+		fprintf(stderr, "[Erreur] process_request_and_response : http version du protocole %s incorrect, la version doit être %s\n", http_version_protocol, HTTP_VERSION_PROTOCOL);
+		return -1;
+	}
+	return 0;
+}	
+	
+/**
+ * Récupère le type mime associé à l'extension
+*/
+char *get_mime_type_extension(const char *extension) {
+	if (extension == NULL) {
+		fprintf(stderr, "[Erreur] -> get_mime_type_extension : extension vaut NULL\n");
+		return NULL;
+	}
+	size_t size_mime_names = sizeof(mime_names) / sizeof(mime_names[0]);
+	for (size_t i = 0; i < size_mime_names; i++) {
+		size_t size_mime_names_extension =  sizeof(mime_names[i]) / sizeof(mime_names[i].extension[0]);
+		printf("size_mime_names_extension %lu\n", size_mime_names_extension);
+		for (size_t j = 0; j < size_mime_names_extension; j++) {
+			if (strncmp(extension, mime_names[i].extension[j], sizeof(char) * strlen(extension)) == 0) {
+				return (char *) mime_names[i].type;
+			}
+		}
+	}
+	return NULL;
 }
 	
 int read_and_write_file_url(char *url) {
@@ -417,31 +475,13 @@ int read_and_write_file_url(char *url) {
 			return -1;
 		}
 	}
-	
-	/*char *idx = NULL;
-	int length = 0;
-	char tmp[size_buffer + 127];
-	while ((n_read = read(fd, &buf_read, count_read)) > 0) {
-		buf_read[n_read] = '\0';
-		if (strncpy(buffer, (char *) buf_read, (size_t) n_read) == NULL) {
-			fprintf(stderr, "[Erreur] -> read_file_url : strncpy : %s\n", strerror(errno));
-			return -1;
-		}
-		idx = buf_read;
-		while (*idx) {
-			length += sprintf(tmp + length, "%s", idx);
-			strncat(buffer+length, (char *) tmp, (long unsigned int)length);
-			idx += strlen(idx) + 1;
-		}
-	}*/
-	
 	if (n_read == -1) {
 		fprintf(stderr, "[Erreur] -> read_file_url : read : %s\n", strerror(errno));
 		return -1;
 	}
 	return 0;
-}
-	
+}	
+
 int set_header(header_t *h, const char *name, const char *value) {
 	if (name == NULL) {
 		fprintf(stderr, "[Erreur] -> set_header : name vaut NULL\n");

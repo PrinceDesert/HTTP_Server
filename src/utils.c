@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 #include <utils.h>
 
 int get_gmt_time(char *buf, size_t size) {
@@ -42,4 +43,29 @@ const char *get_filename_ext(const char *filename) {
 	const char *dot = strrchr(filename, '.');
 	if (!dot || dot == filename) return "";
 	return dot + 1;
+}
+
+/**
+	* Enlever les espaces avant et après
+	* Source : https://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
+	* @param : la chaîne de caractères où il faut enlever les espaces avant et après
+*/
+void trim(char *str) {
+	int i;
+	int begin = 0;
+	int end = ((int) strlen(str)) - 1;
+	// Fait avancer le curseur du début jusqu'à ce qu'il n'y est plus d'espace au début
+	while (isspace((unsigned char) str[begin])) {
+		begin++;
+	}
+	// Fait avancer le curseur de fin jusqu'à ce qu'il n'y est plus d'espace à la fin
+	while ((end >= begin) && isspace((unsigned char) str[end])) {
+		end--;
+	}
+	// Shift all characters back to the start of the string array.
+	for (i = begin; i <= end; i++) {
+		str[i - begin] = str[i];
+	}
+	// Null terminate string.
+	str[i - begin] = '\0';
 }

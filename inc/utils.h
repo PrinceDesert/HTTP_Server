@@ -3,5 +3,6 @@
 
 int get_gmt_time(char *buf, size_t size);
 const char *get_filename_ext(const char *filename);
+void trim(char *str);
 
 #endif

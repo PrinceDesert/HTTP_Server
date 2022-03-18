@@ -34,8 +34,8 @@ typedef _header_t header_t;
 #define MAX_SIZE_TYPE 64
 #define MAX_SIZE_EXTENSION 32
 typedef struct {
-	const char type[MAX_SIZE_TYPE];				// text/plain
-	const char *extension[MAX_SIZE_EXTENSION];	// .txt, tx
+	const char type[MAX_SIZE_TYPE];									// text/plain
+	const char extension[MAX_SIZE_EXTENSION][MAX_SIZE_EXTENSION];	// .txt, tx
 } _mime_type_extension_t;
 typedef  _mime_type_extension_t mime_type_extension_t;
 	
@@ -60,11 +60,12 @@ static const char *method_names[] = {
 	// [POST] = "POST"
 };
 	
-typedef enum {DATE_REQUEST = 0, ACCEPT, IF_MODIFIED_SINCE} request_names_t;
+typedef enum {DATE_REQUEST = 0, ACCEPT, CONNECTION_REQUEST, IF_MODIFIED_SINCE} request_names_t;
 static const char *request_names[] = {
-	[DATE_REQUEST] = "Date",
-	[ACCEPT] = "Accept",
-	[IF_MODIFIED_SINCE]= "If-Modified-Since",
+	[DATE_REQUEST] 			= "Date",
+	[ACCEPT] 				= "Accept",
+	[CONNECTION_REQUEST] 	= "Connection",
+	[IF_MODIFIED_SINCE] 	= "If-Modified-Since",
 };
 	
 #define MAX_SIZE_BODY 1024
@@ -89,14 +90,14 @@ static const char *status_names[] = {
 	[HTTP_VERSION_NOT_SUPPORTED] 	= "505 HTTP Version Not Supported",
 };
 	
-typedef enum {SERVER = 0, CONNECTION, CONTENT_TYPE, CONTENT_LENGTH, DATE_RESPONSE, LAST_MODIFIED} response_names_t;
+typedef enum {SERVER = 0, CONNECTION_RESPONSE, CONTENT_TYPE, CONTENT_LENGTH, DATE_RESPONSE, LAST_MODIFIED} response_names_t;
 static const char *response_names[] = {
-	[SERVER] 			= "Server",
-	[CONNECTION] 		= "Connection",
-	[CONTENT_TYPE] 		= "Content-Type",
-	[CONTENT_LENGTH] 	= "Content-Length",
-	[DATE_RESPONSE] 	= "Date",
-	[LAST_MODIFIED] 	= "Last-Modified",
+	[SERVER] 				= "Server",
+	[CONNECTION_RESPONSE] 	= "Connection",
+	[CONTENT_TYPE] 			= "Content-Type",
+	[CONTENT_LENGTH] 		= "Content-Length",
+	[DATE_RESPONSE] 		= "Date",
+	[LAST_MODIFIED] 		= "Last-Modified",
 };
 	
 typedef struct {
