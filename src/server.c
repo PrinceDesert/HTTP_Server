@@ -41,6 +41,12 @@
  * https://github.com/AaronKalair/C-Web-Server
  * List des champs http : https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
  * // concat with sprintf : https://stackoverflow.com/questions/2674312/how-to-append-strings-using-sprintf
+ 
+// A REVOIR
+// ET AUSSI LE 34 LE SIZE ARRAY
+// ET GERER LES ERREURS SI BAD ALORS PAS DE WRITE et PAS DE WHILE ?
+ 
+ 
 */
 
 #define DEFAULT_INDEX_FILE_NAME "index.html"
@@ -314,7 +320,7 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	
 	// Date
 	char buf_time[256];
-	if (get_gmt_time(buf_time, sizeof(buf_time)) == -1) {
+	if (get_gmt_time(buf_time, NULL, sizeof(buf_time)) == -1) {
 		fprintf(stderr, "[Erreur] -> create_request : get_gmt_time\n");
 		sprintf(buf_time, "%s", "error_date");
 	}
@@ -354,6 +360,18 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	} else {
 		fprintf(stderr, "[Erreur] process_request_and_response : stat %s\n", request.url);
 	}
+	
+	// Last-Modified
+	header_t h_last_modified;
+	memset(buf_time, '\0', sizeof(buf_time));
+	if (get_gmt_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
+		fprintf(stderr, "[Erreur] -> create_request : get_gmt_time\n");
+	} else {
+		if (set_header(&h_last_modified, response_names[LAST_MODIFIED], buf_time) == 0) {
+			response.headers[index_response_header++] = h_last_modified;
+		}
+	}
+	
 	
 	// Concaténation des headers
 	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s %s\n", response.http_version_protocol, status_names[response.status_code]);
@@ -446,7 +464,7 @@ char *get_mime_type_extension(const char *extension) {
 	size_t size_mime_names = sizeof(mime_names) / sizeof(mime_names[0]);
 	for (size_t i = 0; i < size_mime_names; i++) {
 		size_t size_mime_names_extension =  sizeof(mime_names[i]) / sizeof(mime_names[i].extension[0]);
-		printf("size_mime_names_extension %lu\n", size_mime_names_extension);
+		printf("size_mime_names_extension %lu - i : %s - ext : %s\n", size_mime_names_extension, mime_names[i].type, mime_names[i].extension[0]);
 		for (size_t j = 0; j < size_mime_names_extension; j++) {
 			if (strncmp(extension, mime_names[i].extension[j], sizeof(char) * strlen(extension)) == 0) {
 				return (char *) mime_names[i].type;

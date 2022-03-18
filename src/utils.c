@@ -4,13 +4,13 @@
 #include <ctype.h>
 #include <utils.h>
 
-int get_gmt_time(char *buf, size_t size) {
+int get_gmt_time(char *buf, time_t *t, size_t size) {
 	if (buf == NULL) {
 		fprintf(stderr, "[Erreur] get_gmt_time : buf == NULL\n");
 		return -1;
 	};
 	
-	time_t timestamp = time(NULL);
+	time_t timestamp = t == NULL ? time(NULL) : *t;
 	struct tm *time_infos = gmtime(&timestamp);
 	if (time_infos == NULL) {
 		fprintf(stderr, "[Erreur] get_gmt_time : gmtime == NULL\n");
