@@ -8,7 +8,7 @@ int get_gmt_time(char *buf, time_t *t, size_t size) {
 	if (buf == NULL) {
 		fprintf(stderr, "[Erreur] get_gmt_time : buf == NULL\n");
 		return -1;
-	};
+	}
 	
 	time_t timestamp = t == NULL ? time(NULL) : *t;
 	struct tm *time_infos = gmtime(&timestamp);
@@ -35,12 +35,12 @@ int get_gmt_time(char *buf, time_t *t, size_t size) {
 	}*/
 	return 0;
 }
-
+	
 int get_local_time(char *buf, time_t *t, size_t size) {
-		if (buf == NULL) {
+	if (buf == NULL) {
 		fprintf(stderr, "[Erreur] get_local_time : buf == NULL\n");
 		return -1;
-	};
+	}
 	
 	time_t timestamp = t == NULL ? time(NULL) : *t;
 	struct tm *time_infos = localtime(&timestamp);
@@ -56,8 +56,8 @@ int get_local_time(char *buf, time_t *t, size_t size) {
 	
 	return 0;
 }
-
-
+	
+	
 /**
  * Source : https://stackoverflow.com/questions/5309471/getting-file-extension-in-c
  * Example :

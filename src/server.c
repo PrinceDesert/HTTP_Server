@@ -248,7 +248,7 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	time_t t_if_modified_since;
 	if (strptime(val_header_if_modified_since, "%a %b %d %H:%M:%S %Y %Z", &tm_if_modified_since) == NULL) {
 		t_if_modified_since = mktime(&tm_if_modified_since);
-		seconds = difftime(t_if_modified_since, st.st_mtim.tv_sec);
+		seconds = difftime(t_if_modified_since, st.st_mtime);
 		if (seconds > 0) {
 			response.status_code = NOT_MODIFIED;
 		}
