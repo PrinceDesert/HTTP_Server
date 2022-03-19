@@ -27,24 +27,8 @@
 
 /**
  * Fichier server.c
- * Todo : timeout client et server en émission et réception
- * EN TCP : mettre un select sur le descripteur de fichier voir cours
- * utilisé setsockopt ?
- * // mettre un timeout  select pour accept(délai d'attente max d'un client) && receive mais dans la fonction recev de tcp mais ici direct
- * pour le fstat since date : récupèrer la date du fstat et comparé avec la date du since de la request
- * comparé les protocols http/1.1 si c le meme meme si ça sert pas
- * gérer les signaux
- * commenté fichiers sources commentés de vos bibliothèques et de votre serveur http, client
- * des tests de vos bibliothèques et de votre serveur,
- * un rapport et manuel d'utilisation
- * ressources : 
- * https://code.tutsplus.com/tutorials/http-headers-for-dummies--net-8039
- * https://github.com/AaronKalair/C-Web-Server
  * List des champs http : https://en.wikipedia.org/wiki/List_of_HTTP_header_fields
- * // concat with sprintf : https://stackoverflow.com/questions/2674312/how-to-append-strings-using-sprintf
- 
-// A REVOIR
-// GMTLOCALTIME DANS LAST MODIFIED
+ * concat with sprintf : https://stackoverflow.com/questions/2674312/how-to-append-strings-using-sprintf
 */
 
 #define DEFAULT_INDEX_FILE_NAME "index.html"
