@@ -63,7 +63,7 @@ char *get_mime_type_extension(const char *extension);
 char *get_resquest_header_value(header_t headers[],  size_t size_headers, request_names_t request_name);
 int parse_headers(char *buffer_request, char *line, size_t size_line, http_request *request, size_t index_request_header, http_response *response);
 int read_and_write_file_url(char *url);
-int set_header(header_t *h, const char *name, const char *value);
+int set_header(header_t *h, char *name, char *value);
 
 // Gestion des signaux de terminaisons
 void connect_signals(void);
@@ -232,24 +232,6 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 			response.status_code = HTTP_VERSION_NOT_SUPPORTED;
 		}
 	}
-	
-	// Traitement des en-têtes (headers)
-	if (parse_headers(buffer_request, line, sizeof(line), &request, index_request_header, &response) == -1) {
-		response.status_code = BAD_REQUEST;
-	}
-	
-	// Check du corps de la request : pas implémenté
-	/*
-	fprintf(stdout, "Debut de l'analyse du corps de la requête\n");
-	char data[PIPE_BUF];
-	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
-		// mettre dans le buffer
-		sscanf(line, "%s", data);
-		n += sizeof(char) * (strlen(line) + 1);
-		printf("data : %s\n", data);
-	}
-	*/
-	
 	/**
 	 * If Last Modified Since et mettre dans la réponse Last Modified
 	*/
@@ -273,6 +255,27 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 		}
 	}
 	
+	
+	// Traitement des en-têtes (headers)
+	if (response.status_code == OK || response.status_code == NOT_MODIFIED) {
+		if (parse_headers(buffer_request, line, sizeof(line), &request, index_request_header, &response) == -1) {
+			response.status_code = BAD_REQUEST;
+		}
+	}
+	
+	// Check du corps de la request : pas implémenté
+	/*
+	fprintf(stdout, "Debut de l'analyse du corps de la requête\n");
+	char data[PIPE_BUF];
+	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
+		// mettre dans le buffer
+		sscanf(line, "%s", data);
+		n += sizeof(char) * (strlen(line) + 1);
+		printf("data : %s\n", data);
+	}
+	*/
+	
+	
 	// Création des headers de réponse (en têtes)
 	char buffer_headers_response[MAX_SIZE_HEADERS];
 	// Date
@@ -282,12 +285,12 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 		sprintf(buf_time, "%s", "ERROR_DATE");
 	}
 	header_t h_date;
-	if (set_header(&h_date, response_names[DATE_RESPONSE], buf_time) == 0) {
+	if (set_header(&h_date, (char *) response_names[DATE_RESPONSE], buf_time) == 0) {
 		response.headers[index_response_header++] = h_date;
 	}
 	// Server
 	header_t h_server; 
-	if (set_header(&h_server, response_names[SERVER], pservice->remote->nom) == 0) {
+	if (set_header(&h_server, (char *) response_names[SERVER], pservice->remote->nom) == 0) {
 		response.headers[index_response_header++] = h_server;
 	}
 	// Content-Type
@@ -298,14 +301,14 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 		mime_type = (const char *) mime_names[PLAIN].type;
 	}
 	header_t h_content_type;
-	if (set_header(&h_content_type, response_names[CONTENT_TYPE], mime_type) == 0) {
+	if (set_header(&h_content_type, (char *) response_names[CONTENT_TYPE], (char *) mime_type) == 0) {
 		response.headers[index_response_header++] = h_content_type;
 	}
 	// Content-Length
 	header_t h_content_length;
 	char number[1024];
 	if (snprintf(number, sizeof(number), "%ld", st.st_size) != -1) {
-		if (set_header(&h_content_length, response_names[CONTENT_LENGTH], number) == 0) {
+		if (set_header(&h_content_length, (char *) response_names[CONTENT_LENGTH], number) == 0) {
 			response.headers[index_response_header++] = h_content_length;
 		}
 	} else {
@@ -315,29 +318,32 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	// Last-Modified
 	header_t h_last_modified;
 	memset(buf_time, '\0', sizeof(buf_time));
-	if (get_local_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
+	if (get_gmt_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
 		fprintf(stderr, "[Erreur] -> create_request : get_local_time\n");
 	} else {
-		if (set_header(&h_last_modified, response_names[LAST_MODIFIED], buf_time) == 0) {
+		if (set_header(&h_last_modified, (char *) response_names[LAST_MODIFIED], buf_time) == 0) {
 			response.headers[index_response_header++] = h_last_modified;
 		}
 	}
 	
 	// Concaténation des headers
 	length_response += snprintf(buffer_headers_response + length_response, sizeof(buffer_headers_response), "%s %s\n", response.http_version_protocol, status_names[response.status_code]);
-	fprintf(stdout, "Affichage des headers\n");
+	fprintf(stdout, "Affichage des en-têtes de réponse\n");
 	for (size_t i = 0; i < index_response_header; i++) {
 		fprintf(stdout, "%s: %s\n", response.headers[i].name, response.headers[i].value);
-		length_response += snprintf(buffer_headers_response + length_response, sizeof(buffer_headers_response), "%s: %s\n", response.headers[i].name, response.headers[i].value);
+		if (strlen(response.headers[i].name) > 0 && strlen(response.headers[i].value) > 0) {
+			length_response += snprintf(buffer_headers_response + length_response, sizeof(buffer_headers_response), "%s: %s\n", response.headers[i].name, response.headers[i].value);
+		}
 	}
 	// Ligne de séparation
 	length_response += snprintf(buffer_headers_response + length_response, sizeof(buffer_headers_response), "\n");
-	// Envoie du header
+	// Envoie du statut et des en-têtes
 	write_socket_tcp(service, buffer_headers_response, sizeof(char) * (strlen(buffer_headers_response)));
-	
 	// Lecture et envoie du fichier
-	if (read_and_write_file_url(request.url) == -1) {
-		fprintf(stderr, "[Erreur] -> process_request_and_response : read_file_url %s\n", request.url);
+	if (response.status_code == OK) {
+		if (read_and_write_file_url(request.url) == -1) {
+			fprintf(stderr, "[Erreur] -> process_request_and_response : read_file_url %s\n", request.url);
+		}
 	}
 }
 	
@@ -530,7 +536,7 @@ int read_and_write_file_url(char *url) {
 	return 0;
 }	
 
-int set_header(header_t *h, const char *name, const char *value) {
+int set_header(header_t *h, char *name, char *value) {
 	if (name == NULL) {
 		fprintf(stderr, "[Erreur] -> set_header : name vaut NULL\n");
 		return -1;
@@ -541,10 +547,14 @@ int set_header(header_t *h, const char *name, const char *value) {
 	}
 	if (snprintf(h->name, sizeof(h->name), "%s", name) == -1) {
 		fprintf(stderr, "[Erreur] -> set_header : snprintf %s(name)\n", name);
+		*h->name = '\0';
+		*h->value = '\0';
 		return -1;
 	}
 	if (snprintf(h->value, sizeof(h->value), "%s", value) == -1) {
 		fprintf(stderr, "[Erreur] -> set_header : snprintf %s(value)\n", value);
+		*h->name = '\0';
+		*h->value = '\0';
 		return -1;
 	}
 	return 0;
