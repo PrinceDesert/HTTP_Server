@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -160,9 +161,22 @@ void * run_connection_processing(void *arg) {
 	
 	// Acquisition du verrou
 	pthread_mutex_lock(&mutex);
-	printf("Acquisition du verrou\n");
+	// printf("Acquisition du verrou\n");
 	
 	socket_tcp service = *(socket_tcp *) arg;
+	
+	struct timeval timeout = {
+		.tv_sec = TIMEOUT_SOCKET,
+		.tv_usec = 0,
+	};
+	if (setsockopt(service.socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
+		fprintf(stderr, "[Erreur] setsockopt SO_RCVTIMEO\n");
+		return NULL;
+	}
+	if (setsockopt(service.socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) == -1) {
+		fprintf(stderr, "[Erreur] setsockopt SO_SNDTIMEO\n");
+		return NULL;
+	}
 	
 	char buffer_read[PIPE_BUF];
 	buffer_read[PIPE_BUF - 1] = '\0';
@@ -170,12 +184,11 @@ void * run_connection_processing(void *arg) {
 	ssize_t n;
 	if ((n = read_socket_tcp(&service, buffer_read, sizeof(buffer_read))) == -1) {
 		fprintf(stderr, "[Erreur] read_socket_tcp %ld\n", n);
-		return NULL;
+	} else {
+		buffer_read[strlen(buffer_read)] = '\0';
+		fprintf(stdout, "[Server:%d] réception : \n%s\n", pid, buffer_read);
+		process_request_and_response(&service, buffer_read);
 	}
-	buffer_read[strlen(buffer_read)] = '\0';
-	fprintf(stdout, "[Server:%d] réception : \n%s\n", pid, buffer_read);
-	
-	process_request_and_response(&service, buffer_read);
 	
 	// Ferme juste le descripteur, car service encore utilisé pour les nouvelles connexions
 	if (close(service.socket_fd) == -1) {
@@ -184,8 +197,7 @@ void * run_connection_processing(void *arg) {
 	
 	// Libération du verrou
 	pthread_mutex_unlock(&mutex);
-	printf("Libération du verrou\n");
-	
+	// printf("Libération du verrou\n");
 	pthread_exit(NULL); // return NULL;
 }
 
