@@ -171,11 +171,9 @@ void * run_connection_processing(void *arg) {
 	};
 	if (setsockopt(service.socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
 		fprintf(stderr, "[Erreur] setsockopt SO_RCVTIMEO\n");
-		return NULL;
 	}
 	if (setsockopt(service.socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) == -1) {
 		fprintf(stderr, "[Erreur] setsockopt SO_SNDTIMEO\n");
-		return NULL;
 	}
 	
 	char buffer_read[PIPE_BUF];
@@ -194,7 +192,7 @@ void * run_connection_processing(void *arg) {
 	if (close(service.socket_fd) == -1) {
 		fprintf(stderr, "[Erreur] close %d\n", service.socket_fd);
 	}
-	
+	service.socket_fd = -1;
 	// Libération du verrou
 	pthread_mutex_unlock(&mutex);
 	// printf("Libération du verrou\n");
