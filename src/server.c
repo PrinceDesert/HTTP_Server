@@ -56,7 +56,7 @@ void perror_r(int errnum, const char* s); // perror reetrant pour thread
 // Traitement de la requête et l'envoie de la réponse
 void process_request_and_response(socket_tcp *pservice, char *buffer_request);
 int check_request_method(const char *request_method);
-int check_request_url(char *request_url, size_t size_request_url, struct stat *statbuf);
+int check_request_url(char *request_url, size_t size_request_url, struct stat *statbuf, status_t *status);
 int check_request_http_version_protocol(char *http_version_protocol);
 char *get_mime_type_extension(const char *extension);
 char *get_resquest_header_value(header_t headers[],  size_t size_headers, request_names_t request_name);
@@ -221,8 +221,9 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	if (check_request_method(request.method) == -1) {
 		response.status_code = NOT_IMPLEMENTED;
 	}
-	if (check_request_url(request.url, sizeof(request.url), &st) == -1) {
-		response.status_code = NOT_FOUND;
+	status_t tmp_status = OK;
+	if (check_request_url(request.url, sizeof(request.url), &st, &tmp_status) == -1) {
+		response.status_code = tmp_status != OK ? tmp_status : NOT_FOUND;
 	}
 	if (check_request_http_version_protocol(request.http_version_protocol) == -1) {
 		response.status_code = HTTP_VERSION_NOT_SUPPORTED;
@@ -231,6 +232,14 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 			response.status_code = HTTP_VERSION_NOT_SUPPORTED;
 		}
 	}
+		
+	// Traitement des en-têtes (headers)
+	if (response.status_code == OK || response.status_code == NOT_MODIFIED) {
+		if (parse_headers(buffer_request, line, sizeof(line), &request, index_request_header, &response) == -1) {
+			response.status_code = BAD_REQUEST;
+		}
+	}
+	
 	/**
 	 * If Last Modified Since et mettre dans la réponse Last Modified
 	*/
@@ -243,22 +252,16 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 			val_header[i] = '\0';
 		}
 	}*/
-	double seconds = 0.0;
-	struct tm tm_if_modified_since;
-	time_t t_if_modified_since;
-	if (strptime(val_header_if_modified_since, "%a %b %d %H:%M:%S %Y %Z", &tm_if_modified_since) == NULL) {
-		t_if_modified_since = mktime(&tm_if_modified_since);
-		seconds = difftime(t_if_modified_since, st.st_mtime);
-		if (seconds > 0) {
-			response.status_code = NOT_MODIFIED;
-		}
-	}
-	
-	
-	// Traitement des en-têtes (headers)
-	if (response.status_code == OK || response.status_code == NOT_MODIFIED) {
-		if (parse_headers(buffer_request, line, sizeof(line), &request, index_request_header, &response) == -1) {
-			response.status_code = BAD_REQUEST;
+	if (strlen(val_header_if_modified_since) > 0) {
+		double seconds = 0.0;
+		struct tm tm_if_modified_since;
+		time_t t_if_modified_since;
+		if (strptime(val_header_if_modified_since, "%a %b %d %H:%M:%S %Y %Z", &tm_if_modified_since) != NULL) {
+			t_if_modified_since = mktime(&tm_if_modified_since);
+			seconds = difftime(st.st_mtime, t_if_modified_since);
+			if (seconds > 0) {
+				response.status_code = NOT_MODIFIED;
+			}
 		}
 	}
 	
@@ -316,7 +319,7 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	// Last-Modified
 	header_t h_last_modified;
 	memset(buf_time, '\0', sizeof(buf_time));
-	if (get_local_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
+	if (get_gmt_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
 		fprintf(stderr, "[Erreur] -> create_request : get_local_time\n");
 	} else {
 		if (set_header(&h_last_modified, (char *) response_names[LAST_MODIFIED], buf_time) == 0) {
@@ -368,7 +371,7 @@ int check_request_method(const char *request_method) {
 /**
  * Vérifie que l'url est syntaxiquement valide, et vérifie que le fichier est lisible
 */
-int check_request_url(char *request_url, size_t size_request_url, struct stat *statbuf) {
+int check_request_url(char *request_url, size_t size_request_url, struct stat *statbuf, status_t *status) {
 	if (request_url == NULL) {
 		fprintf(stderr, "[Erreur] check_request_url : request_url vaut NULL\n");
 		return -1;
@@ -377,6 +380,7 @@ int check_request_url(char *request_url, size_t size_request_url, struct stat *s
 	if (strncmp(request_url, "/", sizeof(char) * strlen(request_url)) == 0) {
 		if (snprintf(request_url, size_request_url, "%s%s", request_url, DEFAULT_INDEX_FILE_NAME) == -1) {
 			fprintf(stderr, "[Erreur] check_request_url : snprintf adding slash\n");
+			*status = NOT_FOUND;
 			return -1;
 		}
 	}
@@ -385,21 +389,24 @@ int check_request_url(char *request_url, size_t size_request_url, struct stat *s
 		char *copy = strndup(request_url, sizeof(char) * (strlen(request_url) + 1));
 		if (snprintf(request_url, size_request_url, "%c%s", '.', copy) == -1) {
 			fprintf(stderr, "[Erreur] check_request_url : snprintf adding dot\n");
+			*status = NOT_FOUND;
 			return -1;
 		}
 		free(copy);
 	}
-	// Vérifie qu'il est lisible
-	int fd = open(request_url, O_RDONLY);
-	if (fd == -1) {
-		return -1;
-	}
-	close(fd);
 	// Récupère information du fichier
 	if (stat(request_url, statbuf) == -1) {
 		fprintf(stderr, "[Erreur] check_request_url : stat %s\n", request_url);
+		*status = NOT_FOUND;
 		return -1;
 	}
+	// Vérifie qu'il est accessible
+	int fd = open(request_url, O_RDONLY, statbuf->st_mode);
+	if (fd == -1) {
+		*status = FORBIDDEN;
+		return -1;
+	}
+	close(fd);
 	return 0;
 }
 	
