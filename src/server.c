@@ -252,18 +252,22 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	while ((errnum = sscanf(buffer_request + n, "%[^\n]", line)) != EOF && index_request_header < MAX_NUMBER_HEADERS) {
 		// printf("line : %s\n", line);
 		if (strchr(line, ':') != NULL) {
-			if (sscanf(line, "%s%s", request.headers[index_request_header].name, request.headers[index_request_header].value) == EOF) {
+			if (sscanf(line, "%s%[0-9a-zA-Z $&+,:;=?@#|'\"<>.^*()%%!-]", request.headers[index_request_header].name, request.headers[index_request_header].value) == EOF) {
 				response.status_code = BAD_REQUEST;
 				break;
 			}
-			// Enlève le caractère ':'
+			printf("-> %s%s\n", request.headers[index_request_header].name, request.headers[index_request_header].value);
 			trim(request.headers[index_request_header].name);
+			trim(request.headers[index_request_header].value);
+			// Enlève le caractère ':'
 			request.headers[index_request_header].name[strlen(request.headers[index_request_header].name) - 1] = '\0';
 			trim(request.headers[index_request_header].name);
+			trim(request.headers[index_request_header].value);
 			// Vérifie qu'il existe dans les headers traités
 			for (size_t i = 0; i < size_request_headers; i++) {
-				if (strncmp(request.headers[index_request_header].name, request_names[i], 
+				if (strncmp(request.headers[index_request_header].name, request_names[i],
 					sizeof(char) * (strlen(request.headers[index_request_header].name))) == 0) {
+					printf("name : %s, index_request_header : %lu\n", request.headers[index_request_header].name, index_request_header);
 					index_request_header++;
 					break;
 				}
@@ -311,6 +315,14 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	/**
 	 * If Last Modified Since et mettre dans la réponse Last Modified
 	*/
+	const char *s = request.headers[IF_MODIFIED_SINCE].value;
+	printf("modified since : %s\n", s);
+	/*struct tm tm;
+	char buf[255];
+	strptime("2001-11-12 18:31:01", "%Y-%m-%d %H:%M:%S", &tm);*/
+	
+	
+	
 	
 	
 	// Création des headers de répoonse (en têtes)
@@ -463,8 +475,8 @@ char *get_mime_type_extension(const char *extension) {
 	}
 	size_t size_mime_names = sizeof(mime_names) / sizeof(mime_names[0]);
 	for (size_t i = 0; i < size_mime_names; i++) {
-		size_t size_mime_names_extension =  sizeof(mime_names[i]) / sizeof(mime_names[i].extension[0]);
-		printf("size_mime_names_extension %lu - i : %s - ext : %s\n", size_mime_names_extension, mime_names[i].type, mime_names[i].extension[0]);
+		size_t size_mime_names_extension =  sizeof(mime_names[i].extension) / sizeof(mime_names[i].extension[0]);
+		// printf("size_mime_names_extension %lu - i : %s - ext : %s\n", size_mime_names_extension, mime_names[i].type, mime_names[i].extension[0]);
 		for (size_t j = 0; j < size_mime_names_extension; j++) {
 			if (strncmp(extension, mime_names[i].extension[j], sizeof(char) * strlen(extension)) == 0) {
 				return (char *) mime_names[i].type;

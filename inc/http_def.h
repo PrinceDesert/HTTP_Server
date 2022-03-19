@@ -19,8 +19,8 @@
 /* Header format	*/
 /* name : value		*/
 /*------------------*/
-#define MAX_SIZE_NAME_HEADER 64
-#define MAX_SIZE_VALUE_HEADER 256 
+#define MAX_SIZE_NAME_HEADER 1024
+#define MAX_SIZE_VALUE_HEADER 1024 
 typedef struct {
 	char name[MAX_SIZE_NAME_HEADER]; // Request/Response -> Date, useragent, content-type / Response -> Date, Server, Content-Type
 	char value[MAX_SIZE_VALUE_HEADER]; // valeur du nom
