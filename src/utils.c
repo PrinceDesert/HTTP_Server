@@ -17,6 +17,12 @@ int get_gmt_time(char *buf, time_t *t, size_t size) {
 		return -1;
 	}
 	
+	if (strftime(buf, size, "%a %b %d %H:%M:%S %Y %Z", time_infos) == 0) {
+		fprintf(stderr, "[Erreur] get_gmt_time : strftime\n");
+		return -1;
+	}
+	
+	/*
 	char *formatted_time = asctime(time_infos);
 	if (formatted_time == NULL) {
 		fprintf(stderr, "[Erreur] get_gmt_time : asctime == NULL\n");
@@ -26,9 +32,31 @@ int get_gmt_time(char *buf, time_t *t, size_t size) {
 	if (snprintf(buf, size, "%s GMT", formatted_time) == -1) {
 		fprintf(stderr, "[Erreur] get_gmt_time : snprintf\n");
 		return -1;
-	}
+	}*/
 	return 0;
 }
+
+int get_local_time(char *buf, time_t *t, size_t size) {
+		if (buf == NULL) {
+		fprintf(stderr, "[Erreur] get_local_time : buf == NULL\n");
+		return -1;
+	};
+	
+	time_t timestamp = t == NULL ? time(NULL) : *t;
+	struct tm *time_infos = localtime(&timestamp);
+	if (time_infos == NULL) {
+		fprintf(stderr, "[Erreur] get_local_time : gmtime == NULL\n");
+		return -1;
+	}
+	
+	if (strftime(buf, size, "%a %b %d %H:%M:%S %Y %Z", time_infos) == 0) {
+		fprintf(stderr, "[Erreur] get_local_time : strftime\n");
+		return -1;
+	}
+	
+	return 0;
+}
+
 
 /**
  * Source : https://stackoverflow.com/questions/5309471/getting-file-extension-in-c

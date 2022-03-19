@@ -12,8 +12,11 @@
 #define MAX_SIZE_HTTP_VERSION_PROTOCOL 9 // sizeof(char) * (strlen(HTTP_VERSION_PROTOCOL) + 1)
 #define EMPTY_LINE "\r" // Récupèrer en affichant le code ascii de la ligne vide de http
 	
+#define MAX_SIZE_HEADERS 8192
+
 #define MAX_SIZE_METHOD 64
 #define MAX_SIZE_URL	4096
+
 	
 /*------------------*/
 /* Header format	*/
@@ -81,9 +84,10 @@ typedef  _http_request http_request;
 /*-----------------*/
 /* Server Response */
 /*-----------------*/
-typedef enum { OK = 0, BAD_REQUEST, UNAUTHORIZED, NOT_FOUND, NOT_IMPLEMENTED, HTTP_VERSION_NOT_SUPPORTED} status_t;
+typedef enum { OK = 0, NOT_MODIFIED, BAD_REQUEST, UNAUTHORIZED, NOT_FOUND, NOT_IMPLEMENTED, HTTP_VERSION_NOT_SUPPORTED} status_t;
 static const char *status_names[] = {
 	[OK] 							= "200 OK",
+	[NOT_MODIFIED]					= "304 Not Modified",
 	[BAD_REQUEST] 					= "400 Bad Request",
 	[NOT_FOUND]						= "404 Not Found",
 	[NOT_IMPLEMENTED]				= "501 Not Implemented",

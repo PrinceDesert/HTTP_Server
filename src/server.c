@@ -43,16 +43,11 @@
  * // concat with sprintf : https://stackoverflow.com/questions/2674312/how-to-append-strings-using-sprintf
  
 // A REVOIR
-// ET AUSSI LE 34 LE SIZE ARRAY
 // ET GERER LES ERREURS SI BAD ALORS PAS DE WRITE et PAS DE WHILE ?
- 
- 
+// TRAITER URL?nom=X couper l'url
 */
 
 #define DEFAULT_INDEX_FILE_NAME "index.html"
-
-
-// headers["host"] = localhost -> s->getname()
 
 // Ressources de connexion
 void thread_allocation(socket_tcp *service); // Allocation d'un thread
@@ -62,10 +57,11 @@ void perror_r(int errnum, const char* s); // perror reetrant pour thread
 // Traitement de la requête et l'envoie de la réponse
 void process_request_and_response(socket_tcp *pservice, char *buffer_request);
 int check_request_method(const char *request_method);
-int check_request_url(char *request_url, size_t size_request_url);
+int check_request_url(char *request_url, size_t size_request_url, struct stat *statbuf);
 int check_request_http_version_protocol(char *http_version_protocol);
 char *get_mime_type_extension(const char *extension);
-
+char *get_resquest_header_value(header_t headers[],  size_t size_headers, request_names_t request_name);
+int parse_headers(char *buffer_request, char *line, size_t size_line, http_request *request, size_t index_request_header, http_response *response);
 int read_and_write_file_url(char *url);
 int set_header(header_t *h, const char *name, const char *value);
 
@@ -73,14 +69,10 @@ int set_header(header_t *h, const char *name, const char *value);
 void connect_signals(void);
 void handler(int signum);
 
-
 pid_t pid;
 pthread_mutex_t mutex;
 socket_tcp *s;
 socket_tcp *service;
-
-
-// #define VERSION_HTTP "HTTP/1.1" HTTP/1.1 = Version 1.1 = version à mettre dans le define
 
 int main(void) {
 	pid = getpid();
@@ -118,7 +110,6 @@ int main(void) {
 	connect_signals();
 	
 	service = init_socket_tcp();
-	
 	int errnum;
 	printf("[Serveur:%d] En attente de client(s) (MAX_CLIENT_QUEUE=%d)\n", pid, SIZE_QUEUE);
 	while ((errnum = accept_socket_tcp(s, service)) != -1) {
@@ -130,11 +121,9 @@ int main(void) {
 	}
 	
 	close_socket_tcp(service);
-	
 	if (close_socket_tcp(s) == -1) {
 		fprintf(stderr, "[Erreur] close_socket_tcp server %d\n", s->socket_fd);
 	}
-	
 	
 	return EXIT_SUCCESS;
 }
@@ -189,9 +178,7 @@ void * run_connection_processing(void *arg) {
 	
 	process_request_and_response(&service, buffer_read);
 	
-	
 	// Ferme juste le descripteur, car service encore utilisé pour les nouvelles connexions
-	printf("Close socket \n");
 	if (close(service.socket_fd) == -1) {
 		fprintf(stderr, "[Erreur] close %d\n", service.socket_fd);
 	}
@@ -211,136 +198,93 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	if (buffer_request == NULL) {
 		fprintf(stderr, "[Erreur] process_request_and_response : buffer_request = NULL\n");
 	}
+	
+	// Requête
+	http_request request;
+	size_t index_request_header = 0;
+	
+	// Réponse
 	http_response response;
 	response.status_code = OK;
 	size_t index_response_header = 0;
 	int length_response = 0;
-	// 1ère ligne
-	http_request request;
-	size_t index_request_header = 0;
-		
+	struct stat st;
+	
 	char line[1024];
 	if (sscanf(buffer_request, "%[^\n]", line) == EOF) {
 		fprintf(stderr, "[Erreur] process_request_and_response : sscanf line\n");
 		return;
 	}
-	// Récupère la ligne de commande
+	// Traitement de la ligne de commande
 	if (sscanf(line, "%s %s %s", request.method, request.url, request.http_version_protocol) == EOF) {
 		return; 
 	}
-	
 	if (check_request_method(request.method) == -1) {
 		response.status_code = NOT_IMPLEMENTED;
 	}
-	if (check_request_url(request.url, sizeof(request.url)) == -1) {
+	if (check_request_url(request.url, sizeof(request.url), &st) == -1) {
 		response.status_code = NOT_FOUND;
 	}
 	if (check_request_http_version_protocol(request.http_version_protocol) == -1) {
 		response.status_code = HTTP_VERSION_NOT_SUPPORTED;
 	} else {
 		if (snprintf(response.http_version_protocol, sizeof(response.http_version_protocol), "%s", request.http_version_protocol) == -1) {
-			sprintf(response.http_version_protocol, "%s", HTTP_VERSION_PROTOCOL);
+			response.status_code = HTTP_VERSION_NOT_SUPPORTED;
 		}
 	}
 	
-	
-	
-	size_t n = sizeof(char) * (strlen(line) + 1);
-	size_t size_request_headers = sizeof(request_names) / sizeof(request_names[0]);
-	
-	int errnum; 
-	while ((errnum = sscanf(buffer_request + n, "%[^\n]", line)) != EOF && index_request_header < MAX_NUMBER_HEADERS) {
-		// printf("line : %s\n", line);
-		if (strchr(line, ':') != NULL) {
-			if (sscanf(line, "%s%[0-9a-zA-Z $&+,:;=?@#|'\"<>.^*()%%!-]", request.headers[index_request_header].name, request.headers[index_request_header].value) == EOF) {
-				response.status_code = BAD_REQUEST;
-				break;
-			}
-			printf("-> %s%s\n", request.headers[index_request_header].name, request.headers[index_request_header].value);
-			trim(request.headers[index_request_header].name);
-			trim(request.headers[index_request_header].value);
-			// Enlève le caractère ':'
-			request.headers[index_request_header].name[strlen(request.headers[index_request_header].name) - 1] = '\0';
-			trim(request.headers[index_request_header].name);
-			trim(request.headers[index_request_header].value);
-			// Vérifie qu'il existe dans les headers traités
-			for (size_t i = 0; i < size_request_headers; i++) {
-				if (strncmp(request.headers[index_request_header].name, request_names[i],
-					sizeof(char) * (strlen(request.headers[index_request_header].name))) == 0) {
-					printf("name : %s, index_request_header : %lu\n", request.headers[index_request_header].name, index_request_header);
-					index_request_header++;
-					break;
-				}
-			}
-			n += sizeof(char) * (strlen(line) + 1);
-			// printf("header -> name : %s - value : %s\n", request.headers[index_request_header].name, request.headers[index_request_header].name);
-		} else if (strncmp(line, EMPTY_LINE, sizeof(char) * strlen(line)) == 0) {
-			// Ligne de séparation
-			// Vérifie les lignes suivantes
-			size_t n_tmp = n + sizeof(char) * (strlen(line) + 1);
-			n += sizeof(char) * (strlen(line) + 1);
-			int is_separator_line = 1;
-			while (sscanf(buffer_request + n_tmp, "%[^\n]", line) != EOF) {
-				n_tmp += sizeof(char) * (strlen(line) + 1);
-				if (strchr(line, ':') != NULL) {
-					is_separator_line = 0;
-					break;
-				}
-			}
-			memset(line, '\0', sizeof(line));
-			if (is_separator_line) {
-				n = n_tmp;
-				break;
-			}
-		} else {
-			// Erreur dans le format
-			response.status_code = BAD_REQUEST;
-			break;
-		}
-	}
-	if (errnum == EOF) {
+	// Traitement des en-têtes (headers)
+	if (parse_headers(buffer_request, line, sizeof(line), &request, index_request_header, &response) == -1) {
 		response.status_code = BAD_REQUEST;
 	}
 	
 	// Check du corps de la request : pas implémenté
-	/*printf("Debut de l'analyse du corps de la requête\n");
+	/*
+	fprintf(stdout, "Debut de l'analyse du corps de la requête\n");
 	char data[PIPE_BUF];
 	while (sscanf(buffer_request + n, "%[^\n]", line) != EOF) {
 		// mettre dans le buffer
 		sscanf(line, "%s", data);
 		n += sizeof(char) * (strlen(line) + 1);
 		printf("data : %s\n", data);
-	}*/
+	}
+	*/
 	
 	/**
 	 * If Last Modified Since et mettre dans la réponse Last Modified
 	*/
-	const char *s = request.headers[IF_MODIFIED_SINCE].value;
-	printf("modified since : %s\n", s);
-	/*struct tm tm;
-	char buf[255];
-	strptime("2001-11-12 18:31:01", "%Y-%m-%d %H:%M:%S", &tm);*/
+	char *val_header_if_modified_since = get_resquest_header_value(request.headers, sizeof(request.headers), IF_MODIFIED_SINCE);
+	/*char *s_gmt = NULL;
+	if (val_header != NULL && (s_gmt = strstr(val_header, "GMT")) != NULL) {
+		// Enlève le GMT de la date de If Last Modified
+		ssize_t index_of = s_gmt - val_header;
+		for (size_t i = (size_t) index_of; i < sizeof(char) * strlen(val_header); i++) {
+			val_header[i] = '\0';
+		}
+	}*/
+	double seconds = 0.0;
+	struct tm tm_if_modified_since;
+	time_t t_if_modified_since;
+	if (strptime(val_header_if_modified_since, "%a %b %d %H:%M:%S %Y %Z", &tm_if_modified_since) == NULL) {
+		t_if_modified_since = mktime(&tm_if_modified_since);
+		seconds = difftime(t_if_modified_since, st.st_mtim.tv_sec);
+		if (seconds > 0) {
+			response.status_code = NOT_MODIFIED;
+		}
+	}
 	
-	
-	
-	
-	
-	// Création des headers de répoonse (en têtes)
-	
-	char buffer_response[900000];
-	// à remplir en fonction des valeurs
-	
+	// Création des headers de réponse (en têtes)
+	char buffer_headers_response[MAX_SIZE_HEADERS];
 	// Date
 	char buf_time[256];
 	if (get_gmt_time(buf_time, NULL, sizeof(buf_time)) == -1) {
 		fprintf(stderr, "[Erreur] -> create_request : get_gmt_time\n");
-		sprintf(buf_time, "%s", "error_date");
+		sprintf(buf_time, "%s", "ERROR_DATE");
 	}
 	header_t h_date;
 	if (set_header(&h_date, response_names[DATE_RESPONSE], buf_time) == 0) {
 		response.headers[index_response_header++] = h_date;
 	}
-	printf("%s : %s\n", h_date.name, h_date.value);
 	// Server
 	header_t h_server; 
 	if (set_header(&h_server, response_names[SERVER], pservice->remote->nom) == 0) {
@@ -359,43 +303,38 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	}
 	// Content-Length
 	header_t h_content_length;
-	struct stat st;
-	if (stat(request.url, &st) != -1) {
-		char number[1024];
-		if (snprintf(number, sizeof(number), "%ld", st.st_size) != -1) {
-			if (set_header(&h_content_length, response_names[CONTENT_LENGTH], number) == 0) {
-				response.headers[index_response_header++] = h_content_length;
-			}
-		} else {
-			fprintf(stderr, "[Erreur] process_request_and_response : stat number\n");
+	char number[1024];
+	if (snprintf(number, sizeof(number), "%ld", st.st_size) != -1) {
+		if (set_header(&h_content_length, response_names[CONTENT_LENGTH], number) == 0) {
+			response.headers[index_response_header++] = h_content_length;
 		}
 	} else {
-		fprintf(stderr, "[Erreur] process_request_and_response : stat %s\n", request.url);
+		fprintf(stderr, "[Erreur] process_request_and_response : stat number\n");
 	}
 	
 	// Last-Modified
 	header_t h_last_modified;
 	memset(buf_time, '\0', sizeof(buf_time));
-	if (get_gmt_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
-		fprintf(stderr, "[Erreur] -> create_request : get_gmt_time\n");
+	if (get_local_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
+		fprintf(stderr, "[Erreur] -> create_request : get_local_time\n");
 	} else {
 		if (set_header(&h_last_modified, response_names[LAST_MODIFIED], buf_time) == 0) {
 			response.headers[index_response_header++] = h_last_modified;
 		}
 	}
 	
-	
 	// Concaténation des headers
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s %s\n", response.http_version_protocol, status_names[response.status_code]);
-	printf("Affichage des headers\n");
+	length_response += snprintf(buffer_headers_response + length_response, sizeof(buffer_headers_response), "%s %s\n", response.http_version_protocol, status_names[response.status_code]);
+	fprintf(stdout, "Affichage des headers\n");
 	for (size_t i = 0; i < index_response_header; i++) {
-		printf("%s: %s\n", response.headers[i].name, response.headers[i].value);
-		length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "%s: %s\n", response.headers[i].name, response.headers[i].value);
+		fprintf(stdout, "%s: %s\n", response.headers[i].name, response.headers[i].value);
+		length_response += snprintf(buffer_headers_response + length_response, sizeof(buffer_headers_response), "%s: %s\n", response.headers[i].name, response.headers[i].value);
 	}
 	// Ligne de séparation
-	length_response += snprintf(buffer_response + length_response, sizeof(buffer_response), "\n");
+	length_response += snprintf(buffer_headers_response + length_response, sizeof(buffer_headers_response), "\n");
 	// Envoie du header
-	write_socket_tcp(service, buffer_response, sizeof(char) * (strlen(buffer_response)));	
+	write_socket_tcp(service, buffer_headers_response, sizeof(char) * (strlen(buffer_headers_response)));
+	
 	// Lecture et envoie du fichier
 	if (read_and_write_file_url(request.url) == -1) {
 		fprintf(stderr, "[Erreur] -> process_request_and_response : read_file_url %s\n", request.url);
@@ -424,7 +363,7 @@ int check_request_method(const char *request_method) {
 /**
  * Vérifie que l'url est syntaxiquement valide, et vérifie que le fichier est lisible
 */
-int check_request_url(char *request_url, size_t size_request_url) {
+int check_request_url(char *request_url, size_t size_request_url, struct stat *statbuf) {
 	if (request_url == NULL) {
 		fprintf(stderr, "[Erreur] check_request_url : request_url vaut NULL\n");
 		return -1;
@@ -451,6 +390,11 @@ int check_request_url(char *request_url, size_t size_request_url) {
 		return -1;
 	}
 	close(fd);
+	// Récupère information du fichier
+	if (stat(request_url, statbuf) == -1) {
+		fprintf(stderr, "[Erreur] check_request_url : stat %s\n", request_url);
+		return -1;
+	}
 	return 0;
 }
 	
@@ -484,6 +428,80 @@ char *get_mime_type_extension(const char *extension) {
 		}
 	}
 	return NULL;
+}
+	
+/**
+ * Récupère la valeur de l'en tête à associé au nom du header
+*/
+char *get_resquest_header_value(header_t headers[], size_t size_headers, request_names_t request_name) {
+	for (size_t i = 0; i < size_headers; i++) {
+		if (strncmp(headers[i].name, request_names[request_name],
+			sizeof(char) * (strlen(headers[i].name))) == 0) {
+			return headers[i].value;
+		}
+	}
+	return NULL;
+}
+	
+/**
+ * Analyse les en têtes et les enregistrent dans http_request
+*/
+int parse_headers(char *buffer_request, char *line, size_t size_line, http_request *request, size_t index_request_header, http_response *response) {
+	size_t n = sizeof(char) * (strlen(line) + 1);
+	size_t size_request_headers = sizeof(request_names) / sizeof(request_names[0]);
+	int errnum; 
+	while ((errnum = sscanf(buffer_request + n, "%[^\n]", line)) != EOF && index_request_header < MAX_NUMBER_HEADERS) {
+		// printf("line : %s\n", line);
+		if (strchr(line, ':') != NULL) {
+			if (sscanf(line, "%s%[0-9a-zA-Z $&+,:;=?@#|'\"<>.^*()%%!-]", request->headers[index_request_header].name, request->headers[index_request_header].value) == EOF) {
+				response->status_code = BAD_REQUEST;
+				return -1;
+			}
+			trim(request->headers[index_request_header].name);
+			trim(request->headers[index_request_header].value);
+			// Enlève le caractère ':'
+			request->headers[index_request_header].name[strlen(request->headers[index_request_header].name) - 1] = '\0';
+			trim(request->headers[index_request_header].name);
+			trim(request->headers[index_request_header].value);
+			// Vérifie qu'il existe dans les headers traités
+			for (size_t i = 0; i < size_request_headers; i++) {
+				if (strncmp(request->headers[index_request_header].name, request_names[i],
+					sizeof(char) * (strlen(request->headers[index_request_header].name))) == 0) {
+					index_request_header++;
+					break;
+				}
+			}
+			fprintf(stdout, "%s%s\n", request->headers[index_request_header].name, request->headers[index_request_header].value);
+			n += sizeof(char) * (strlen(line) + 1);
+		} else if (strncmp(line, EMPTY_LINE, sizeof(char) * strlen(line)) == 0) {
+			// Ligne de séparation
+			// Vérifie les lignes suivantes
+			size_t n_tmp = n + sizeof(char) * (strlen(line) + 1);
+			n += sizeof(char) * (strlen(line) + 1);
+			int is_separator_line = 1;
+			while (sscanf(buffer_request + n_tmp, "%[^\n]", line) != EOF) {
+				n_tmp += sizeof(char) * (strlen(line) + 1);
+				if (strchr(line, ':') != NULL) {
+					is_separator_line = 0;
+					break;
+				}
+			}
+			memset(line, '\0', size_line);
+			if (is_separator_line) {
+				n = n_tmp;
+				break;
+			}
+		} else {
+			// Erreur dans le format
+			response->status_code = BAD_REQUEST;
+			return -1;
+		}
+	}
+	if (errnum == EOF) {
+		response->status_code = BAD_REQUEST;
+		return -1;
+	}
+	return 0;
 }
 	
 int read_and_write_file_url(char *url) {
