@@ -43,8 +43,7 @@
  * // concat with sprintf : https://stackoverflow.com/questions/2674312/how-to-append-strings-using-sprintf
  
 // A REVOIR
-// ET GERER LES ERREURS SI BAD ALORS PAS DE WRITE et PAS DE WHILE ?
-// TRAITER URL?nom=X couper l'url
+// GMTLOCALTIME DANS LAST MODIFIED
 */
 
 #define DEFAULT_INDEX_FILE_NAME "index.html"
@@ -216,8 +215,8 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 		return;
 	}
 	// Traitement de la ligne de commande
-	if (sscanf(line, "%s %s %s", request.method, request.url, request.http_version_protocol) == EOF) {
-		return; 
+	if (sscanf(line, "%s%s%s", request.method, request.url, request.http_version_protocol) == EOF) {
+		return;
 	}
 	if (check_request_method(request.method) == -1) {
 		response.status_code = NOT_IMPLEMENTED;
@@ -275,7 +274,6 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	}
 	*/
 	
-	
 	// Création des headers de réponse (en têtes)
 	char buffer_headers_response[MAX_SIZE_HEADERS];
 	// Date
@@ -297,7 +295,7 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	const char *extension = get_filename_ext(request.url);
 	const char *mime_type = get_mime_type_extension(extension); 
 	if (mime_type == NULL) {
-		response.status_code = BAD_REQUEST;
+		response.status_code = NOT_FOUND;
 		mime_type = (const char *) mime_names[PLAIN].type;
 	}
 	header_t h_content_type;
@@ -318,7 +316,7 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	// Last-Modified
 	header_t h_last_modified;
 	memset(buf_time, '\0', sizeof(buf_time));
-	if (get_gmt_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
+	if (get_local_time(buf_time, &st.st_mtime, sizeof(buf_time)) == -1) {
 		fprintf(stderr, "[Erreur] -> create_request : get_local_time\n");
 	} else {
 		if (set_header(&h_last_modified, (char *) response_names[LAST_MODIFIED], buf_time) == 0) {
@@ -329,6 +327,7 @@ void process_request_and_response(socket_tcp *pservice, char *buffer_request) {
 	// Concaténation des headers
 	length_response += snprintf(buffer_headers_response + length_response, sizeof(buffer_headers_response), "%s %s\n", response.http_version_protocol, status_names[response.status_code]);
 	fprintf(stdout, "Affichage des en-têtes de réponse\n");
+	fprintf(stdout, "%s", buffer_headers_response);
 	for (size_t i = 0; i < index_response_header; i++) {
 		fprintf(stdout, "%s: %s\n", response.headers[i].name, response.headers[i].value);
 		if (strlen(response.headers[i].name) > 0 && strlen(response.headers[i].value) > 0) {
