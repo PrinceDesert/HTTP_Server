@@ -86,6 +86,8 @@ int main() {
 	//adresse_internet_free(adr_new2);
 	
 	// adresse_internet_copy
+	printf("========== TEST : adresse_internet_copy ==========\n");
+	adresse_internet_copy(adr_new, adr_any);
 	
 	
 	adresse_internet_free(adr_new);

@@ -14,11 +14,13 @@ INCDIR = inc
 TESTDIR = test
 # Nom des fichiers sans l'extension c et o
 SERVER = server
-CLIENT = client
 ADRESSE_INTERNET = adresse_internet
 SOCKET_TCP = socket_tcp
 UTILS = utils
 TEST_ADRESSE_INTERNET = test_$(ADRESSE_INTERNET)
+TEST_SERVER = test_$(SERVER)
+TEST_CLIENT = test_client
+
 #--------------------------------------------------------------#
 # Construction des dossiers bin, obj, lib et test : make build #
 #--------------------------------------------------------------#
@@ -51,7 +53,27 @@ test_adresse_internet : ./$(BINDIR)/$(TEST_ADRESSE_INTERNET)
 	$(CC) -o ./$(BINDIR)/$(TEST_ADRESSE_INTERNET) ./$(OBJDIR)/$(TEST_ADRESSE_INTERNET).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o $(LDLIBS)
 ./$(OBJDIR)/$(TEST_ADRESSE_INTERNET).o : ./$(TESTDIR)/$(TEST_ADRESSE_INTERNET).c
 	$(CC) -c ./$(TESTDIR)/$(TEST_ADRESSE_INTERNET).c $(CFLAGS) -I $(INCDIR) -o ./$(OBJDIR)/$(TEST_ADRESSE_INTERNET).o
-	
+
+#-------------------------------------#
+# Test serveur tcp : make test_server #
+#-------------------------------------#
+test_server : ./$(BINDIR)/$(TEST_SERVER)
+	./$(BINDIR)/$(TEST_SERVER)
+./$(BINDIR)/$(TEST_SERVER) : ./$(OBJDIR)/$(TEST_SERVER).o
+	$(CC) -o ./$(BINDIR)/$(TEST_SERVER) ./$(OBJDIR)/$(TEST_SERVER).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o ./$(OBJDIR)/$(SOCKET_TCP).o $(LDLIBS)
+./$(OBJDIR)/$(TEST_SERVER).o : ./$(TESTDIR)/$(TEST_SERVER).c
+	$(CC) -c ./$(TESTDIR)/$(TEST_SERVER).c $(CFLAGS) -I $(INCDIR) -o ./$(OBJDIR)/$(TEST_SERVER).o
+
+#------------------------------------#
+# Test client tcp : make test_client #
+#------------------------------------#
+test_client : ./$(BINDIR)/$(TEST_CLIENT)
+	./$(BINDIR)/$(TEST_CLIENT)
+./$(BINDIR)/$(TEST_CLIENT) : ./$(OBJDIR)/$(TEST_CLIENT).o
+	$(CC) -o ./$(BINDIR)/$(TEST_CLIENT) ./$(OBJDIR)/$(TEST_CLIENT).o ./$(OBJDIR)/$(ADRESSE_INTERNET).o ./$(OBJDIR)/$(SOCKET_TCP).o $(LDLIBS)
+./$(OBJDIR)/$(TEST_CLIENT).o : ./$(TESTDIR)/$(TEST_CLIENT).c
+	$(CC) -c ./$(TESTDIR)/$(TEST_CLIENT).c $(CFLAGS) -I $(INCDIR) -o ./$(OBJDIR)/$(TEST_CLIENT).o
+
 #-----------#
 # Nettoyage #
 #-----------#
