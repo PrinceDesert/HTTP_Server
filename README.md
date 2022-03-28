@@ -1,6 +1,6 @@
 # Projet Systèmes et réseaux : Serveur HTTP
 
-Le timeout devrait être sur la socket d'écoute et non sur la socket de service car elle utilise déja la primitive accept qui attend une connexion.
+Remarque : Le timeout doit être sur la socket d'écoute et non sur la socket de service car elle utilise déja la primitive accept qui attend une connexion.
 
 ## Pré-requis :
 - Installer Make
